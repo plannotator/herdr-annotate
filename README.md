@@ -25,7 +25,10 @@ On Windows, native Herdr plugin support is preview/best-effort. Bun must be on `
 herdr plugin install plannotator/herdr-annotate
 ```
 
-Add these key bindings to `~/.config/herdr/config.toml`:
+Add these key bindings to Herdr's config:
+
+- macOS and Linux: `~/.config/herdr/config.toml`
+- Windows: `%APPDATA%\herdr\config.toml`
 
 ```toml
 [[keys.command]]

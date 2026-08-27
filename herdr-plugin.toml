@@ -1,6 +1,6 @@
 id = "annotate"
 name = "Annotate"
-version = "0.2.0"
+version = "0.3.0"
 min_herdr_version = "0.8.0"
 description = "Comment on terminal selections and copy annotations as agent context."
 platforms = ["linux", "macos", "windows"]
