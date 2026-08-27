@@ -61,6 +61,20 @@ export function selectedTextFromInvocation(value: unknown): string | undefined {
   return selectedText?.trim() ? selectedText : undefined;
 }
 
+/** Build a pending annotation from selected text supplied by a Herdr pane invocation. */
+export function pendingAnnotationFromInvocation(
+  value: unknown,
+  capturedAt = new Date().toISOString(),
+): PendingAnnotation | undefined {
+  const selectedText = selectedTextFromInvocation(value);
+  if (!selectedText) return undefined;
+  return {
+    selectedText,
+    context: parseInvocationContext(value),
+    capturedAt,
+  };
+}
+
 /** Parse a pending-annotation file, returning undefined when required fields are invalid. */
 export function parsePendingAnnotation(value: unknown): PendingAnnotation | undefined {
   if (!isRecord(value)) return undefined;

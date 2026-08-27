@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { parseArchivedAnnotationSet, selectedTextFromInvocation } from "../src/types";
+import {
+  parseArchivedAnnotationSet,
+  pendingAnnotationFromInvocation,
+  selectedTextFromInvocation,
+} from "../src/types";
 
 function persistedAnnotation(id: string): Record<string, unknown> {
   return {
@@ -24,6 +28,35 @@ describe("selectedTextFromInvocation", () => {
     expect(selectedTextFromInvocation({ selected_text: 42 })).toBeUndefined();
     expect(selectedTextFromInvocation({ selected_text: " \n\t" })).toBeUndefined();
     expect(selectedTextFromInvocation(null)).toBeUndefined();
+  });
+});
+
+describe("pendingAnnotationFromInvocation", () => {
+  test("builds the editor fallback with invocation context", () => {
+    expect(
+      pendingAnnotationFromInvocation(
+        {
+          selected_text: "selected text",
+          workspace_id: "workspace-1",
+          focused_pane_cwd: "C:\\work",
+        },
+        "2026-08-27T00:00:00Z",
+      ),
+    ).toEqual({
+      selectedText: "selected text",
+      context: {
+        workspace_id: "workspace-1",
+        focused_pane_cwd: "C:\\work",
+      },
+      capturedAt: "2026-08-27T00:00:00Z",
+    });
+  });
+
+  test("returns undefined for a missing or empty invocation selection", () => {
+    expect(pendingAnnotationFromInvocation({}, "2026-08-27T00:00:00Z")).toBeUndefined();
+    expect(
+      pendingAnnotationFromInvocation({ selected_text: " \n" }, "2026-08-27T00:00:00Z"),
+    ).toBeUndefined();
   });
 });
 

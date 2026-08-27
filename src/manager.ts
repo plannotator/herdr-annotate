@@ -395,7 +395,7 @@ try {
 }
 process.stdout.on("resize", render);
 
-readline.emitKeypressEvents(process.stdin);
+readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 20 } as any);
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
 process.stdin.resume();
 process.stdin.on("keypress", (text: string, key: readline.Key) => {

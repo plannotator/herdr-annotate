@@ -1,9 +1,8 @@
 #!/usr/bin/env bun
 import fs from "node:fs";
 import path from "node:path";
-import { readClipboard } from "./clipboard";
 import { notify, runHerdr } from "./herdr";
-import { stateDir } from "./paths";
+import { normalizeWindowsPath, pluginRoot, stateDir } from "./paths";
 import {
   parseInvocationContext,
   selectedTextFromInvocation,
@@ -19,7 +18,13 @@ try {
     selectedText = selectedTextFromInvocation(decoded);
   } catch {}
 
+  const dir = stateDir();
+  if (!dir) throw new Error("HERDR_PLUGIN_STATE_DIR is not set");
+  const root = pluginRoot();
+  if (!root) throw new Error("HERDR_PLUGIN_ROOT is not set");
+
   if (!selectedText) {
+    const { readClipboard } = await import("./clipboard");
     const clipboard = readClipboard();
     if (!clipboard.ok) throw new Error(clipboard.message);
     selectedText = clipboard.value;
@@ -28,9 +33,6 @@ try {
     notify("Nothing to annotate", "Select text in Herdr or copy text to the clipboard.");
     process.exit(0);
   }
-
-  const dir = stateDir();
-  if (!dir) throw new Error("HERDR_PLUGIN_STATE_DIR is not set");
   fs.mkdirSync(dir, { recursive: true });
 
   const pending: PendingAnnotation = {
@@ -38,13 +40,17 @@ try {
     context,
     capturedAt: new Date().toISOString(),
   };
-  const pendingPath = path.join(dir, `pending-${Date.now()}-${process.pid}.json`);
+  const pendingPath = normalizeWindowsPath(
+    path.join(dir, `pending-${Date.now()}-${process.pid}.json`),
+  );
   fs.writeFileSync(pendingPath, `${JSON.stringify(pending)}\n`, { mode: 0o600 });
 
   const opened = runHerdr([
     "plugin",
     "pane",
     "open",
+    "--cwd",
+    root,
     "--plugin",
     "annotate",
     "--entrypoint",

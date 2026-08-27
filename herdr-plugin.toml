@@ -10,21 +10,21 @@ id = "capture"
 title = "Annotate selection"
 description = "Open a comment dialog for the current terminal selection."
 contexts = ["pane"]
-command = ["bun", "run", "src/capture.ts"]
+command = ["bun", "src/capture.ts"]
 
 [[actions]]
 id = "copy-context"
 title = "Copy annotations as context"
 description = "Copy all saved annotations to the clipboard as Markdown."
 contexts = ["global"]
-command = ["bun", "run", "src/export.ts"]
+command = ["bun", "src/export.ts"]
 
 [[actions]]
 id = "manage"
 title = "Manage annotations"
 description = "Browse, copy, archive, restore, and delete annotations."
 contexts = ["global"]
-command = ["bun", "run", "src/open-manager.ts"]
+command = ["bun", "src/open-manager.ts"]
 
 [[panes]]
 id = "editor"
@@ -32,7 +32,7 @@ title = "Annotate"
 placement = "popup"
 width = 88
 height = 24
-command = ["bun", "run", "src/editor.ts"]
+command = ["bun", "src/editor.ts"]
 
 [[panes]]
 id = "manager"
@@ -40,4 +40,4 @@ title = "Annotations"
 placement = "popup"
 width = 100
 height = 30
-command = ["bun", "run", "src/manager.ts"]
+command = ["bun", "src/manager.ts"]

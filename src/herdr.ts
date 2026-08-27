@@ -9,7 +9,11 @@ export type HerdrResult =
 
 /** Invoke Herdr synchronously and return a safe error projection on failure. */
 export function runHerdr(args: readonly string[]): HerdrResult {
-  const result = spawnSync(binary, args, { encoding: "utf8" });
+  const result = spawnSync(binary, args, {
+    encoding: "utf8",
+    stdio: ["ignore", "ignore", "pipe"],
+    windowsHide: process.platform === "win32",
+  });
   if (result.status !== 0) {
     return {
       ok: false,
@@ -23,5 +27,9 @@ export function runHerdr(args: readonly string[]): HerdrResult {
 export function notify(title: string, body?: string): void {
   const args = ["notification", "show", title];
   if (body) args.push("--body", body);
-  spawnSync(binary, args, { encoding: "utf8" });
+  spawnSync(binary, args, {
+    encoding: "utf8",
+    stdio: ["ignore", "ignore", "pipe"],
+    windowsHide: process.platform === "win32",
+  });
 }

@@ -1,10 +1,21 @@
 #!/usr/bin/env bun
 import { notify, runHerdr } from "./herdr";
+import { pluginRoot } from "./paths";
+
+const root = pluginRoot();
+if (!root) {
+  const message = "HERDR_PLUGIN_ROOT is not set";
+  notify("Unable to open annotations", message);
+  console.error(message);
+  process.exit(1);
+}
 
 const opened = runHerdr([
   "plugin",
   "pane",
   "open",
+  "--cwd",
+  root,
   "--plugin",
   "annotate",
   "--entrypoint",

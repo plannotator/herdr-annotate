@@ -4,19 +4,38 @@ import fs from "node:fs";
 import readline from "node:readline";
 import { sanitizeTerminalText, wrapText } from "./format";
 import { stateDir } from "./paths";
-import { appendAnnotation } from "./store";
-import { parsePendingAnnotation, type Annotation, type PendingAnnotation } from "./types";
+import type { StoreResult } from "./store";
+import {
+  parsePendingAnnotation,
+  pendingAnnotationFromInvocation,
+  type Annotation,
+  type PendingAnnotation,
+} from "./types";
 
 const pendingPath = process.env.HERDR_ANNOTATE_PENDING;
 let pending: PendingAnnotation;
 
+function invocationContext(): unknown {
+  try {
+    return JSON.parse(process.env.HERDR_PLUGIN_CONTEXT_JSON ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
 try {
-  if (!pendingPath) throw new Error("Missing pending annotation");
-  const decoded: unknown = JSON.parse(fs.readFileSync(pendingPath, "utf8"));
-  const parsed = parsePendingAnnotation(decoded);
-  if (!parsed) throw new Error("Pending annotation is invalid");
-  pending = parsed;
-  fs.rmSync(pendingPath, { force: true });
+  const invocation = invocationContext();
+  if (!pendingPath) {
+    const fallback = pendingAnnotationFromInvocation(invocation);
+    if (!fallback) throw new Error("Missing pending annotation");
+    pending = fallback;
+  } else {
+    const decoded: unknown = JSON.parse(fs.readFileSync(pendingPath, "utf8"));
+    const parsed = parsePendingAnnotation(decoded);
+    if (!parsed) throw new Error("Pending annotation is invalid");
+    pending = parsed;
+    fs.rmSync(pendingPath, { force: true });
+  }
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
@@ -120,7 +139,7 @@ function exit(code: number): void {
   process.exit(code);
 }
 
-function save(): void {
+async function save(): Promise<void> {
   const value = comment.join("").trim();
   if (!value) {
     status = "Write a comment before saving.";
@@ -139,7 +158,15 @@ function save(): void {
     comment: value,
     createdAt: new Date().toISOString(),
   };
-  const saved = appendAnnotation(dir, annotation);
+  let saved: StoreResult<undefined>;
+  try {
+    const { appendAnnotation } = await import("./store");
+    saved = appendAnnotation(dir, annotation);
+  } catch {
+    status = "Unable to save annotation.";
+    render();
+    return;
+  }
   if (!saved.ok) {
     status = saved.message;
     render();
@@ -159,13 +186,16 @@ try {
 }
 process.stdout.on("resize", render);
 
-readline.emitKeypressEvents(process.stdin);
+readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 20 } as any);
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
 process.stdin.resume();
 process.stdin.on("keypress", (text: string, key: readline.Key) => {
   status = "";
   if (key.ctrl && key.name === "c") return exit(0);
-  if (key.ctrl && key.name === "s") return save();
+  if (key.ctrl && key.name === "s") {
+    void save();
+    return;
+  }
   if (key.name === "escape") return exit(0);
   if (key.name === "backspace") {
     if (cursor > 0) comment.splice(--cursor, 1);
