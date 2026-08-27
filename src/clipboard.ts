@@ -50,6 +50,7 @@ export function readClipboard(): ClipboardResult<string> {
     const result = spawnSync(candidate.command, candidate.args, {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
+      windowsHide: process.platform === "win32",
     });
     if (result.status === 0 && typeof result.stdout === "string") {
       return { ok: true, value: result.stdout };
@@ -65,6 +66,7 @@ export function writeClipboard(text: string): ClipboardResult<undefined> {
       input: text,
       encoding: "utf8",
       stdio: ["pipe", "ignore", "ignore"],
+      windowsHide: process.platform === "win32",
     });
     if (result.status === 0) return { ok: true, value: undefined };
   }

@@ -13,9 +13,11 @@ Herdr Annotate adds comments to copied terminal text in [Herdr](https://github.c
 
 - Herdr 0.8.0 or later
 - [Bun](https://bun.sh/)
-- macOS or Linux
+- macOS, Linux, or Windows
 
 On Linux, install `wl-clipboard`, `xclip`, or `xsel` for clipboard access.
+
+On Windows, native Herdr plugin support is preview/best-effort. Bun must be on `PATH`. Clipboard access uses PowerShell; no extra clipboard package is required. The install, keybinding, configuration check, reload, and use instructions below also apply on Windows.
 
 ## Install
 

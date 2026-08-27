@@ -388,7 +388,11 @@ reloadActive();
 reloadArchives();
 process.on("exit", cleanup);
 process.on("SIGTERM", () => exit(0));
-process.on("SIGHUP", () => exit(0));
+try {
+  process.on("SIGHUP", () => exit(0));
+} catch {
+  // SIGHUP is not available on every supported platform.
+}
 process.stdout.on("resize", render);
 
 readline.emitKeypressEvents(process.stdin);
