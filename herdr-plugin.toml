@@ -44,6 +44,8 @@ command = ["bun", "src/manager.ts"]
 
 # ---------------------------------------------------------------------------------------
 # Document review with plannotator-tui (https://github.com/plannotator/plannotator-tui).
+# Commands resolve through $HERDR_PLUGIN_ROOT: the review pane is opened with --cwd set to
+# the folder under review, so a path relative to the plugin root would not resolve there.
 # A prebuilt binary is fetched into bin/ at build time; macOS and Linux for now. Where it
 # opens (overlay | split | popup) is the user's choice in ~/.config/plannotator-tui/config.toml.
 
@@ -56,7 +58,7 @@ id = "doc"
 title = "Annotate"
 placement = "overlay"
 platforms = ["macos", "linux"]
-command = ["bash", "scripts/plannotator-tui.sh", "herdr", "pane"]
+command = ["sh", "-c", "exec bash \"$HERDR_PLUGIN_ROOT/scripts/plannotator-tui.sh\" herdr pane"]
 
 # Both actions run the launcher, which reads Herdr's invocation context: the focused pane's
 # folder (open) or the clicked file:// link (open-link), and the focused pane's agent as
@@ -67,7 +69,7 @@ title = "Annotate: open here"
 description = "Review the focused pane's folder in plannotator-tui and send feedback to its agent."
 contexts = ["workspace", "pane"]
 platforms = ["macos", "linux"]
-command = ["bash", "scripts/plannotator-tui.sh", "herdr", "open"]
+command = ["sh", "-c", "exec bash \"$HERDR_PLUGIN_ROOT/scripts/plannotator-tui.sh\" herdr open"]
 
 [[actions]]
 id = "open-link"
@@ -75,7 +77,7 @@ title = "Annotate this file"
 description = "Open a Ctrl-clicked Markdown file in plannotator-tui."
 contexts = ["pane"]
 platforms = ["macos", "linux"]
-command = ["bash", "scripts/plannotator-tui.sh", "herdr", "open"]
+command = ["sh", "-c", "exec bash \"$HERDR_PLUGIN_ROOT/scripts/plannotator-tui.sh\" herdr open"]
 
 [[actions]]
 id = "last"
@@ -83,7 +85,7 @@ title = "Annotate: agent's last message"
 description = "Review the focused agent's most recent message in plannotator-tui and send feedback back."
 contexts = ["pane"]
 platforms = ["macos", "linux"]
-command = ["bash", "scripts/plannotator-tui.sh", "herdr", "last"]
+command = ["sh", "-c", "exec bash \"$HERDR_PLUGIN_ROOT/scripts/plannotator-tui.sh\" herdr last"]
 
 # Ctrl-click on a file:// Markdown link. Anchored on the scheme so web links never match.
 [[link_handlers]]
