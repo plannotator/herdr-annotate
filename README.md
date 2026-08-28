@@ -147,6 +147,27 @@ Full install. Works with Claude Code, Codex, pi, Copilot CLI and Droid.
 | Open as full tab, split, or popup | `[herdr] placement = "overlay" \| "split" \| "popup"` in `~/.config/plannotator-tui/config.toml` |
 | Use without Herdr | [plannotator-tui](https://github.com/plannotator/plannotator-tui) |
 
+### Remote sessions
+
+`prefix+a` works over SSH and `herdr --remote` with two settings on the **remote** server.
+Herdr's default copy-on-select clears the selection the moment you release the mouse, and
+the plugin runs on the server, where your clipboard isn't reachable.
+
+```toml
+# remote server: ~/.config/herdr/config.toml
+[ui]
+copy_on_select = false   # the selection stays; copy explicitly with Ctrl+C
+```
+
+Put the key bindings above in the **server's** config too, and attach with:
+
+```sh
+herdr --remote <host> --remote-keybindings server
+```
+
+Without the flag, `herdr --remote` uses your local keys and drops plugin bindings, so the
+key does nothing.
+
 ## Selection limits
 
 Herdr Annotate reads text that Herdr copies to the system clipboard. The plugin cannot read selection state from Neovim or another terminal application.
