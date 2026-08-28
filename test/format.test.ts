@@ -51,3 +51,17 @@ describe("formatAnnotations", () => {
     expect(output).toContain("````\n```example```\n````");
   });
 });
+
+describe("wrapText with wide characters", () => {
+  test("wraps on cells so lines fit the box", () => {
+    expect(wrapText("한글한글", 4)).toEqual(["한글", "한글"]);
+  });
+
+  test("never splits a wide character across lines", () => {
+    expect(wrapText("한글한", 5)).toEqual(["한글", "한"]);
+  });
+
+  test("mixes narrow and wide characters", () => {
+    expect(wrapText("a한b한", 4)).toEqual(["a한b", "한"]);
+  });
+});

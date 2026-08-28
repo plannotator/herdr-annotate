@@ -1,4 +1,5 @@
 import type { Annotation } from "./types";
+import { charWidth } from "./width";
 
 /** Remove terminal control characters while retaining useful whitespace. */
 export function sanitizeTerminalText(text: string): string {
@@ -17,9 +18,19 @@ export function wrapText(text: string, width: number): string[] {
       output.push("");
       continue;
     }
-    for (let index = 0; index < chars.length; index += safeWidth) {
-      output.push(chars.slice(index, index + safeWidth).join(""));
+    let line = "";
+    let used = 0;
+    for (const char of chars) {
+      const width = charWidth(char);
+      if (used + width > safeWidth && line !== "") {
+        output.push(line);
+        line = "";
+        used = 0;
+      }
+      line += char;
+      used += width;
     }
+    output.push(line);
   }
   return output;
 }

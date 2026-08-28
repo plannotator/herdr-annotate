@@ -4,6 +4,7 @@ import readline from "node:readline";
 import { copyAndArchiveAnnotations, restoreArchivedSet } from "./archive-workflow";
 import { writeClipboard } from "./clipboard";
 import { sanitizeTerminalText, wrapText } from "./format";
+import { stringWidth, truncateToWidth } from "./width";
 import { copyAnnotations } from "./manager-copy";
 import { stateDir } from "./paths";
 import {
@@ -72,9 +73,9 @@ function reloadArchives(): boolean {
 }
 
 function clipped(text: string, width: number): string {
-  const chars = Array.from(sanitizeTerminalText(text).replace(/\s+/g, " ").trim());
-  if (chars.length <= width) return chars.join("");
-  return `${chars.slice(0, Math.max(0, width - 1)).join("")}…`;
+  const value = sanitizeTerminalText(text).replace(/\s+/g, " ").trim();
+  if (stringWidth(value) <= width) return value;
+  return `${truncateToWidth(value, Math.max(0, width - 1))}…`;
 }
 
 function writeAt(row: number, col: number, text: string): void {

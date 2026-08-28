@@ -4,6 +4,8 @@ import fs from "node:fs";
 import readline from "node:readline";
 import { sanitizeTerminalText, wrapText } from "./format";
 import { stateDir } from "./paths";
+import { layoutComment } from "./layout";
+import { charWidth, stringWidth, truncateToWidth } from "./width";
 import type { StoreResult } from "./store";
 import {
   parsePendingAnnotation,
@@ -51,43 +53,21 @@ function moveCursorVertical(delta: number): void {
   const before = comment.slice(0, cursor).join("");
   const lines = before.split("\n");
   const row = lines.length - 1;
-  const col = Array.from(lines[row] ?? "").length;
+  const col = stringWidth(lines[row] ?? "");
   const allLines = comment.join("").split("\n");
   const targetRow = Math.max(0, Math.min(allLines.length - 1, row + delta));
   let next = 0;
-  for (let index = 0; index < targetRow; index += 1) next += Array.from(allLines[index]).length + 1;
-  cursor = next + Math.min(col, Array.from(allLines[targetRow]).length);
-}
-
-function commentLines(width: number): { lines: string[]; cursorRow: number; cursorCol: number } {
-  const safeWidth = Math.max(1, width);
-  const lines: string[] = [""];
-  let row = 0;
-  let col = 0;
-  let cursorRow = 0;
-  let cursorCol = 0;
-  for (let index = 0; index <= comment.length; index += 1) {
-    if (col >= safeWidth) {
-      lines.push("");
-      row += 1;
-      col = 0;
-    }
-    if (index === cursor) {
-      cursorRow = row;
-      cursorCol = col;
-    }
-    if (index === comment.length) break;
-    const char = comment[index];
-    if (char === "\n") {
-      lines.push("");
-      row += 1;
-      col = 0;
-      continue;
-    }
-    lines[row] += char;
-    col += 1;
+  for (let index = 0; index < targetRow; index += 1) next += Array.from(allLines[index] as string).length + 1;
+  // Land on the character whose cell column is closest to the current one.
+  let offset = 0;
+  let used = 0;
+  for (const char of allLines[targetRow] as string) {
+    const width = charWidth(char);
+    if (used + width > col) break;
+    used += width;
+    offset += 1;
   }
-  return { lines, cursorRow, cursorCol };
+  cursor = next + offset;
 }
 
 function writeAt(row: number, col: number, text: string): void {
@@ -103,7 +83,7 @@ function render(): void {
   const editorRows = Math.max(1, rows - selectionRows - 5);
   const wrappedSelection = wrapText(sanitizeTerminalText(pending.selectedText), innerWidth);
   const selected = wrappedSelection.slice(0, selectionRows);
-  const editing = commentLines(innerWidth);
+  const editing = layoutComment(comment, cursor, innerWidth);
   const editorStart = Math.max(0, editing.cursorRow - editorRows + 1);
   const visibleEditor = editing.lines.slice(editorStart, editorStart + editorRows);
 
@@ -119,7 +99,7 @@ function render(): void {
   visibleEditor.forEach((line, index) => writeAt(commentTitleRow + 1 + index, left, line));
 
   const footer = status || "Ctrl+S save  ·  Esc cancel  ·  Enter new line";
-  writeAt(rows, left, `\x1b[2m${Array.from(footer).slice(0, innerWidth).join("")}\x1b[0m`);
+  writeAt(rows, left, `\x1b[2m${truncateToWidth(footer, innerWidth)}\x1b[0m`);
 
   const visualCursorRow = editing.cursorRow - editorStart;
   if (visualCursorRow >= 0 && visualCursorRow < editorRows) {
