@@ -1,30 +1,33 @@
 id = "annotate"
 name = "Annotate"
-version = "0.3.0"
+version = "0.3.1"
 min_herdr_version = "0.8.0"
 description = "Comment on terminal selections and copy annotations as agent context."
 platforms = ["linux", "macos", "windows"]
+
+[[build]]
+command = ["bun", "run", "build:plugin"]
 
 [[actions]]
 id = "capture"
 title = "Annotate selection"
 description = "Open a comment dialog for the current terminal selection."
 contexts = ["pane"]
-command = ["bun", "src/capture.ts"]
+command = ["./bin/herdr-annotate.exe", "capture"]
 
 [[actions]]
 id = "copy-context"
 title = "Copy annotations as context"
 description = "Copy all saved annotations to the clipboard as Markdown."
 contexts = ["global"]
-command = ["bun", "src/export.ts"]
+command = ["./bin/herdr-annotate.exe", "copy-context"]
 
 [[actions]]
 id = "manage"
 title = "Manage annotations"
 description = "Browse, copy, archive, restore, and delete annotations."
 contexts = ["global"]
-command = ["bun", "src/open-manager.ts"]
+command = ["./bin/herdr-annotate.exe", "manage"]
 
 [[panes]]
 id = "editor"
@@ -32,7 +35,7 @@ title = "Annotate"
 placement = "popup"
 width = 88
 height = 24
-command = ["bun", "src/editor.ts"]
+command = ["./bin/herdr-annotate.exe", "editor"]
 
 [[panes]]
 id = "manager"
@@ -40,4 +43,4 @@ title = "Annotations"
 placement = "popup"
 width = 100
 height = 30
-command = ["bun", "src/manager.ts"]
+command = ["./bin/herdr-annotate.exe", "manager"]

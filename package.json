@@ -1,9 +1,10 @@
 {
   "name": "herdr-annotate",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "scripts": {
+    "build:plugin": "bun run scripts/build-plugin.ts",
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit"
   },

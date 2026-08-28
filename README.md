@@ -12,8 +12,10 @@ Herdr Annotate adds comments to copied terminal text in [Herdr](https://github.c
 ## Requirements
 
 - Herdr 0.8.0 or later
-- [Bun](https://bun.sh/)
+- [Bun](https://bun.sh/) for installation and local development
 - macOS, Linux, or Windows
+
+Installation builds a plugin-local executable. The Herdr server does not need Bun on its `PATH` after installation.
 
 On Linux, install `wl-clipboard`, `xclip`, or `xsel` for clipboard access.
 
@@ -83,6 +85,7 @@ Herdr Annotate reads text that Herdr copies to the system clipboard. The plugin 
 
 ```sh
 bun install
+bun run build:plugin
 bun test
 bun run typecheck
 herdr plugin link "$PWD" --enabled
