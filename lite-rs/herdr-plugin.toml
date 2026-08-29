@@ -1,0 +1,57 @@
+# Herdr Annotate Lite, native Rust evaluation build.
+# Link locally after staging a build with scripts/stage-local.sh.
+
+id = "annotate"
+name = "Annotate"
+version = "0.3.0-rust.1"
+min_herdr_version = "0.8.0"
+description = "Comment on terminal selections and copy annotations as agent context. Native Rust evaluation build."
+platforms = ["linux", "macos", "windows"]
+
+[[build]]
+platforms = ["macos", "linux"]
+command = ["bash", "scripts/fetch-herdr-annotate.sh"]
+
+[[build]]
+platforms = ["windows"]
+command = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "scripts/fetch-herdr-annotate.ps1"]
+
+# Herdr resolves explicit relative programs against $HERDR_PLUGIN_ROOT. The common `.exe`
+# suffix lets one argv-only manifest work on all three platforms; it is an ordinary executable
+# filename on macOS/Linux and the required executable suffix on Windows.
+[[actions]]
+id = "capture"
+title = "Annotate selection"
+description = "Open a comment dialog for the current terminal selection."
+contexts = ["pane"]
+command = ["./bin/herdr-annotate.exe", "capture"]
+
+[[actions]]
+id = "copy-context"
+title = "Copy annotations as context"
+description = "Copy all saved annotations to the clipboard as Markdown."
+contexts = ["global"]
+command = ["./bin/herdr-annotate.exe", "copy-context"]
+
+[[actions]]
+id = "manage"
+title = "Manage annotations"
+description = "Browse, copy, archive, restore, and delete annotations."
+contexts = ["global"]
+command = ["./bin/herdr-annotate.exe", "manage"]
+
+[[panes]]
+id = "editor"
+title = "Annotate"
+placement = "popup"
+width = 88
+height = 24
+command = ["./bin/herdr-annotate.exe", "editor"]
+
+[[panes]]
+id = "manager"
+title = "Annotations"
+placement = "popup"
+width = 100
+height = 30
+command = ["./bin/herdr-annotate.exe", "manager"]

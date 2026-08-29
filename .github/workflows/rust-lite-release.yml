@@ -1,0 +1,73 @@
+name: rust-lite-release
+
+on:
+  push:
+    tags: ["rust-lite-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: tag and pins match Cargo.toml
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' rust/Cargo.toml | head -1)
+          test "rust-lite-v$version" = "${GITHUB_REF_NAME}"
+          test "$version" = "$(tr -d '[:space:]' < lite-rs/herdr-annotate.version)"
+
+  build:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu,  os: ubuntu-22.04 }
+          - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm }
+          - { target: x86_64-apple-darwin,       os: macos-15-intel }
+          - { target: aarch64-apple-darwin,      os: macos-15 }
+          - { target: x86_64-pc-windows-msvc,   os: windows-latest }
+          - { target: aarch64-pc-windows-msvc,  os: windows-11-arm }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          key: ${{ matrix.target }}
+      - run: cargo build --manifest-path rust/Cargo.toml --release --target ${{ matrix.target }}
+      - name: name asset by target
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp "rust/target/${{ matrix.target }}/release/herdr-annotate.exe" "dist/herdr-annotate-${{ matrix.target }}.exe"
+          else
+            cp "rust/target/${{ matrix.target }}/release/herdr-annotate" "dist/herdr-annotate-${{ matrix.target }}"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: checksums
+        run: cd dist && sha256sum herdr-annotate-* > SHA256SUMS && cat SHA256SUMS
+      - name: publish evaluation binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --prerelease --title "${GITHUB_REF_NAME}" --generate-notes dist/*
