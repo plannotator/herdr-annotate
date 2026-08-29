@@ -171,6 +171,12 @@ herdr --remote <host> --remote-keybindings server
 Without the flag, `herdr --remote` uses your local keys and drops plugin bindings, so the
 key does nothing.
 
+Known Herdr limitation ([herdrdev/herdr#3380](https://github.com/herdrdev/herdr/issues/3380)): the
+prefix keypress clears a retained mouse selection, and a copy-mode selection is cancelled
+before the action runs, so `selected_text` never reaches the plugin and it falls back to the
+server's clipboard, which a headless server does not have. Until that is fixed, use the
+Neovim mapping below on headless servers: it hands the selection over in a file.
+
 ## Selection limits
 
 Herdr Annotate reads text that Herdr copies to the system clipboard. The plugin cannot read selection state from Neovim or another terminal application.
@@ -198,17 +204,18 @@ Add this visual-mode mapping to `~/.config/nvim/lua/config/keymaps.lua` for Lazy
 
 ```lua
 vim.keymap.set("x", "<leader>a", function()
-  vim.cmd('normal! "+y')
-  vim.fn.jobstart({
-    "herdr",
-    "plugin",
-    "action",
-    "invoke",
-    "annotate.capture",
-  })
+  -- Hand the selection to the plugin through a file: works on headless servers too.
+  vim.cmd('normal! "zy')
+  local base = os.getenv("XDG_RUNTIME_DIR")
+  if not base or base == "" then base = vim.fn.fnamemodify(vim.fn.tempname(), ":h") end
+  local dir = base .. "/herdr-annotate-" .. vim.loop.getuid()
+  vim.fn.mkdir(dir, "p", "0700")
+  vim.fn.writefile(vim.split(vim.fn.getreg("z"), "\n"), dir .. "/selection")
+  vim.fn.jobstart({ "herdr", "plugin", "action", "invoke", "annotate.capture" })
 end, { desc = "Annotate in Herdr" })
 ```
 
 Select text with the mouse or Visual mode. Then press `<leader>a` to open Herdr Annotate.
+The file is read once and removed; a file older than 15 seconds is ignored.
 
 LazyVim uses `Space` as `<leader>` by default. The mapping keeps mouse support and leaves normal Neovim commands unchanged.

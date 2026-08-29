@@ -24,6 +24,12 @@ try {
   if (!root) throw new Error("HERDR_PLUGIN_ROOT is not set");
 
   if (!selectedText) {
+    // A program on the server (Neovim's mapping) may have handed the selection over in a
+    // file; that beats the clipboard, which a headless server does not have.
+    const { takeHandoff } = await import("./handoff");
+    selectedText = takeHandoff();
+  }
+  if (!selectedText) {
     const { readClipboard } = await import("./clipboard");
     const clipboard = readClipboard();
     if (!clipboard.ok) throw new Error(clipboard.message);
