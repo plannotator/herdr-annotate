@@ -134,7 +134,7 @@ herdr server reload-config
 
 ### Review documents and agent replies
 
-Full install. Works with Claude Code, Codex, pi, Copilot CLI and Droid.
+Full install. Works with Claude Code, Codex, pi, Copilot CLI, Droid, Oh My Pi, Hermes CLI and OpenCode.
 
 | Key | Opens |
 |---|---|
