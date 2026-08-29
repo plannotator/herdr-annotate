@@ -34,8 +34,7 @@ pub fn take_handoff(file: &Path, now: SystemTime, max_age: Duration) -> Option<S
     let fresh = metadata.is_file()
         && metadata
             .modified()
-            .ok()
-            .is_some_and(|modified| now.duration_since(modified).unwrap_or_default() <= max_age);
+            .is_ok_and(|modified| now.duration_since(modified).unwrap_or_default() <= max_age);
     let text = fresh.then(|| std::fs::read_to_string(file).ok()).flatten();
     let _ = std::fs::remove_file(file);
     text.filter(|value| !javascript_trim(value).is_empty())
