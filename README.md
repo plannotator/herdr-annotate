@@ -9,7 +9,7 @@ Annotate inside [Herdr](https://github.com/herdrdev/herdr): comment on any termi
   </a>
 </p>
 
-[▶ Watch the demo](https://x.com/plannotator/status/2093419561077154287)
+▶ Watch the demo: [Full](https://x.com/plannotator/status/2093419561077154287) · [Lite](https://x.com/plannotator/status/2092757422322627008)
 
 ## Requirements
 
