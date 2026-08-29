@@ -152,30 +152,40 @@ Full install. Works with Claude Code, Codex, pi, Copilot CLI, Droid, Oh My Pi, H
 
 ### Remote sessions
 
-`prefix+a` works over SSH and `herdr --remote` with two settings on the **remote** server.
-Herdr's default copy-on-select clears the selection the moment you release the mouse, and
-the plugin runs on the server, where your clipboard isn't reachable.
+Over SSH or `herdr --remote`, the plugin runs on the **server**, and two things get in the way:
+Herdr's default copy-on-select clears the selection on mouse-up, and the prefix keypress
+clears whatever selection remains before a bound action runs
+([herdrdev/herdr#3380](https://github.com/herdrdev/herdr/issues/3380)). A headless server also
+has no clipboard for the plugin to fall back to.
 
-```toml
-# remote server: ~/.config/herdr/config.toml
-[ui]
-copy_on_select = false   # the selection stays; copy explicitly with Ctrl+C
-```
+What works today:
 
-Put the key bindings above in the **server's** config too, and attach with:
+1. On the server, keep the selection after mouse-up:
 
-```sh
-herdr --remote <host> --remote-keybindings server
-```
+   ```toml
+   # remote server: ~/.config/herdr/config.toml
+   [ui]
+   copy_on_select = false   # the selection stays; copy explicitly with Ctrl+C
+   ```
 
-Without the flag, `herdr --remote` uses your local keys and drops plugin bindings, so the
-key does nothing.
+2. Trigger the action **without a keypress in Herdr**, while the selection is still
+   highlighted. From your laptop, bound to any key in your terminal or OS:
 
-Known Herdr limitation ([herdrdev/herdr#3380](https://github.com/herdrdev/herdr/issues/3380)): the
-prefix keypress clears a retained mouse selection, and a copy-mode selection is cancelled
-before the action runs, so `selected_text` never reaches the plugin and it falls back to the
-server's clipboard, which a headless server does not have. Until that is fixed, use the
-Neovim mapping below on headless servers: it hands the selection over in a file.
+   ```sh
+   ssh <host> herdr plugin action invoke annotate.capture
+   # named session on the server: ssh <host> HERDR_SESSION=<name> herdr plugin action invoke annotate.capture
+   ```
+
+   The action reads the focused pane's selection through Herdr's API, which never touches the
+   keyboard path, so the text arrives. Verified: the same selection gives `selected_text` this
+   way and nothing through `prefix+a`.
+
+3. In Neovim, use the mapping below; it hands the selection over in a file.
+
+Server-side key bindings and `herdr --remote <host> --remote-keybindings server` are still
+needed for the manager (`prefix+m`) and other plugin keys; without the flag, `herdr --remote`
+uses your local keys and drops plugin bindings. `prefix+a` itself will work once
+herdrdev/herdr#3380 is fixed.
 
 ## Selection limits
 
