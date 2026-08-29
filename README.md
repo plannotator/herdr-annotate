@@ -26,8 +26,7 @@ Pick one. Installing the other later just swaps it (same plugin id).
 <img src="assets/install-full.svg" width="200" align="left" alt="Full">
 
 **Full:** annotate terminal text, review documents and agent replies, send feedback to the agent.
-Downloads the pinned [plannotator-tui](https://github.com/plannotator/plannotator-tui) binary
-(macOS and Linux today). Reinstall to upgrade.
+Wraps [Plannotator TUI](https://github.com/plannotator/plannotator-tui) (macOS and Linux today).
 
 ```sh
 herdr plugin install plannotator/herdr-annotate
@@ -37,7 +36,7 @@ herdr plugin install plannotator/herdr-annotate
 
 <img src="assets/install-lite.svg" width="200" align="left" alt="Lite">
 
-**Lite:** terminal annotations only. No download, all platforms.
+**Lite:** the simple version: select text, `prefix+a`, comment in a popover.
 
 ```sh
 herdr plugin install plannotator/herdr-annotate/lite
