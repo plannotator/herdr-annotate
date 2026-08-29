@@ -9,6 +9,8 @@ Annotate inside [Herdr](https://github.com/herdrdev/herdr): comment on any termi
   </a>
 </p>
 
+[▶ Watch the demo](https://x.com/plannotator/status/2093419561077154287)
+
 ## Requirements
 
 - Herdr 0.8.0 or later
