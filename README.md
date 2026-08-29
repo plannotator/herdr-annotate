@@ -25,7 +25,7 @@ Pick one. Installing the other later just swaps it (same plugin id).
 
 <img src="assets/install-full.svg" width="200" align="left" alt="Full">
 
-**Full** — annotate terminal text, review documents and agent replies, send feedback to the agent.
+**Full:** annotate terminal text, review documents and agent replies, send feedback to the agent.
 Downloads the pinned [plannotator-tui](https://github.com/plannotator/plannotator-tui) binary
 (macOS and Linux today). Reinstall to upgrade.
 
@@ -37,7 +37,7 @@ herdr plugin install plannotator/herdr-annotate
 
 <img src="assets/install-lite.svg" width="200" align="left" alt="Lite">
 
-**Lite** — terminal annotations only. No download, all platforms.
+**Lite:** terminal annotations only. No download, all platforms.
 
 ```sh
 herdr plugin install plannotator/herdr-annotate/lite
@@ -49,7 +49,7 @@ herdr plugin install plannotator/herdr-annotate/lite
 > (Windows: `%APPDATA%\herdr\config.toml`). Copy one block.
 
 <details open>
-<summary><b>Full install keys</b> — terminal annotations + document and agent-reply review</summary>
+<summary><b>Full install keys:</b> terminal annotations + document and agent-reply review</summary>
 
 ```toml
 # Terminal annotations
@@ -88,7 +88,7 @@ description = "review the agent's last reply"
 </details>
 
 <details>
-<summary><b>Lite install keys</b> — terminal annotations only</summary>
+<summary><b>Lite install keys:</b> terminal annotations only</summary>
 
 ```toml
 [[keys.command]]
