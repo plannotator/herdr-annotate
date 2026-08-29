@@ -44,8 +44,7 @@ herdr plugin install plannotator/herdr-annotate/lite
 
 <br clear="all">
 
-> **Required.** Bind the keys in Herdr's config: `~/.config/herdr/config.toml`
-> (Windows: `%APPDATA%\herdr\config.toml`). Copy one block.
+> **Required.** Bind the keys in Herdr's config.
 
 <details open>
 <summary><b>Full install keys:</b> terminal annotations + document and agent-reply review</summary>
