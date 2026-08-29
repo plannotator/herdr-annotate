@@ -188,6 +188,10 @@ To test a local plannotator-tui build instead of the pinned release, put it in `
 before linking: `PLANNOTATOR_TUI_BIN=/path/to/plannotator-tui bash scripts/fetch-plannotator-tui.sh`.
 `herdr plugin link` replaces any existing `annotate` link; link the other directory to switch back.
 
+Before a release, `HERDR_SESSION=<disposable session> bash scripts/smoke.sh` installs fresh, upgrades
+from the first shipped commit, installs lite, swaps to full, and opens the review pane, then restores
+whatever was installed.
+
 ## Neovim integration
 
 Add this visual-mode mapping to `~/.config/nvim/lua/config/keymaps.lua` for LazyVim, or to `init.lua`:
