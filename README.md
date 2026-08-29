@@ -11,8 +11,8 @@ Annotate inside [Herdr](https://github.com/herdrdev/herdr): comment on any termi
 
 **Watch the demos**
 
-[![Demo: Full install](https://img.shields.io/badge/%E2%96%B6%20Demo%3A%20Full%20install-c9c6f1?style=flat-square&labelColor=171429)](https://x.com/plannotator/status/2093419561077154287)
-[![Demo: Lite install](https://img.shields.io/badge/%E2%96%B6%20Demo%3A%20Lite%20install-f7ca5e?style=flat-square&labelColor=171429)](https://x.com/plannotator/status/2092757422322627008)
+[![Demo: Full install](https://img.shields.io/badge/%E2%96%B6%20Demo%3A%20Full%20install-f7ca5e?style=flat-square&labelColor=171429)](https://x.com/plannotator/status/2093419561077154287)
+[![Demo: Lite install](https://img.shields.io/badge/%E2%96%B6%20Demo%3A%20Lite%20install-c9c6f1?style=flat-square&labelColor=171429)](https://x.com/plannotator/status/2092757422322627008)
 
 ## Requirements
 
