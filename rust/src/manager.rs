@@ -111,7 +111,7 @@ impl ManagerApp {
         let rows = usize::from(area.height.max(14));
         let list_width = ((cols * 36) / 100).clamp(22, 36);
         let detail_left = list_width + 2;
-        let detail_width = cols.saturating_sub(detail_left + 1).max(1);
+        let detail_width = cols.saturating_sub(detail_left + 2).max(1);
         let list_rows = rows.saturating_sub(4).max(1);
 
         for row in 1..rows.saturating_sub(1) {
@@ -841,6 +841,30 @@ mod tests {
         assert!(rows(&app).iter().any(|row| row.contains("Press d again")));
         app.handle_key(KeyEvent::from(KeyCode::Esc));
         assert!(!app.quit);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn archive_preview_uses_the_typescript_detail_width() {
+        let dir = directory();
+        let mut item = annotation("long");
+        item.selected_text = "x".repeat(100);
+        append_archived_set(
+            &dir,
+            &ArchivedAnnotationSet {
+                version: 1,
+                id: "archive-long".to_owned(),
+                archived_at: "2026-08-26T23:32:00Z".to_owned(),
+                annotations: vec![item],
+            },
+        )
+        .expect("archive");
+        let mut app = ManagerApp::load(dir.clone());
+        app.handle_key(KeyEvent::from(KeyCode::Tab));
+        let frame = rows(&app);
+        let preview = frame.get(5).expect("archive preview row");
+        assert_eq!(preview.chars().nth(95), Some('…'));
+        assert_eq!(preview.chars().nth(96), Some(' '));
         let _ = fs::remove_dir_all(dir);
     }
 

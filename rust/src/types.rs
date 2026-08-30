@@ -36,8 +36,8 @@ pub struct PendingAnnotation {
 #[serde(rename_all = "camelCase")]
 pub struct Annotation {
     pub selected_text: String,
-    pub context: InvocationContext,
     pub captured_at: String,
+    pub context: InvocationContext,
     pub id: String,
     pub comment: String,
     pub created_at: String,
@@ -53,8 +53,8 @@ impl Annotation {
     ) -> Self {
         Self {
             selected_text: pending.selected_text,
-            context: pending.context,
             captured_at: pending.captured_at,
+            context: pending.context,
             id,
             comment,
             created_at,
@@ -270,20 +270,25 @@ mod tests {
     }
 
     #[test]
-    fn serialization_matches_the_typescript_field_names_and_order() {
+    fn serialization_matches_the_typescript_pending_and_saved_field_order() {
+        let pending = PendingAnnotation {
+            selected_text: "selection".to_owned(),
+            context: InvocationContext::default(),
+            captured_at: "captured".to_owned(),
+        };
+        assert_eq!(
+            serde_json::to_string(&pending).expect("pending json"),
+            r#"{"selectedText":"selection","context":{},"capturedAt":"captured"}"#
+        );
         let annotation = Annotation::from_pending(
-            PendingAnnotation {
-                selected_text: "selection".to_owned(),
-                context: InvocationContext::default(),
-                captured_at: "captured".to_owned(),
-            },
+            pending,
             "id".to_owned(),
             "comment".to_owned(),
             "created".to_owned(),
         );
         assert_eq!(
             serde_json::to_string(&annotation).expect("json"),
-            r#"{"selectedText":"selection","context":{},"capturedAt":"captured","id":"id","comment":"comment","createdAt":"created"}"#
+            r#"{"selectedText":"selection","capturedAt":"captured","context":{},"id":"id","comment":"comment","createdAt":"created"}"#
         );
     }
 }

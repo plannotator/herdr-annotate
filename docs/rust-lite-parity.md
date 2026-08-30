@@ -28,9 +28,10 @@ separately so test coverage is not confused with behavior observed inside Herdr.
   non-empty saved fields, complete version-1 archive validation, unknown-field tolerance.
 - [x] `paths.ts`: state/root environment variables, Windows extended drive and UNC normalization,
   `annotations.jsonl` and `archives.jsonl` names.
-- [x] `store.ts`: append-order JSONL, exact camelCase field names and TypeScript field order, trailing
-  newline, mode 0600, whole-store invalid-data rejection, ID merge/remove, atomic temporary replace,
-  per-store directory locks, owner tokens, 30-second stale recovery, ownership-checked release.
+- [x] `store.ts`: append-order JSONL, exact camelCase field names and distinct TypeScript pending and
+  saved-record field orders, trailing newline, mode 0600, whole-store invalid-data rejection, ID
+  merge/remove, atomic temporary replace, per-store directory locks, owner tokens, 30-second stale
+  recovery, ownership-checked release.
 - [x] `format.ts`: control sanitization, four-space tabs, CRLF normalization, explicit-newline and
   terminal-cell wrapping, Markdown headings/source/fences/blank-line shape, safe longer backtick fence.
 - [x] `width.ts` and `layout.ts`: the same wide ranges, zero-width controls/combining marks, non-
@@ -61,10 +62,12 @@ document-anchor/API wire shape, not Lite's existing terminal-selection JSONL sha
 Additional Rust-only coverage:
 
 - `editor::tests`: headless 86×22 `TestBackend` frame, Unicode edit keys, empty-save validation, quit.
-- `manager::tests`: headless 98×28 active/archive frames, newest-first detail, confirmation, real clear.
+- `manager::tests`: headless 98×28 active/archive frames, newest-first detail, exact TypeScript detail
+  width at the clipping boundary, confirmation, real clear.
 - `rust/tests/commands.rs`: subprocess-level capture/manage/copy-context commands with a fake Herdr,
   including exact pane argv, pending JSON, notifications, and pending cleanup on pane-open failure.
-- `types::tests::serialization_matches_the_typescript_field_names_and_order`: literal JSON byte shape.
+- `types::tests::serialization_matches_the_typescript_pending_and_saved_field_order`: literal pending
+  and saved JSON byte shapes.
 
 ## Distribution and verification
 

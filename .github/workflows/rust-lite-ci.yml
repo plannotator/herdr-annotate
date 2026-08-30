@@ -2,6 +2,11 @@ name: rust-lite-ci
 
 on:
   pull_request:
+    paths:
+      - "rust/**"
+      - "lite-rs/**"
+      - "scripts/smoke-rust-lite.sh"
+      - ".github/workflows/rust-lite-*.yml"
   merge_group:
 
 concurrency:
