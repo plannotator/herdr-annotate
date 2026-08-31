@@ -5,7 +5,7 @@ $version = [string](Get-Content -LiteralPath "plannotator-tui.version" -Raw)
 $version = $version.Trim()
 if (-not $version) { throw "plannotator-tui.version is empty" }
 
-$destinationDirectory = "bin"
+$destinationDirectory = Join-Path (Get-Location).Path "bin"
 $destination = Join-Path $destinationDirectory "plannotator-tui.exe"
 $stamp = Join-Path $destinationDirectory "plannotator-tui.version"
 New-Item -ItemType Directory -Force $destinationDirectory | Out-Null
