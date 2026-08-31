@@ -35,7 +35,13 @@ pub fn take_handoff(file: &Path, now: SystemTime, max_age: Duration) -> Option<S
         && metadata
             .modified()
             .is_ok_and(|modified| now.duration_since(modified).unwrap_or_default() <= max_age);
-    let text = fresh.then(|| std::fs::read_to_string(file).ok()).flatten();
+    let text = fresh
+        .then(|| {
+            std::fs::read(file)
+                .ok()
+                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+        })
+        .flatten();
     let _ = std::fs::remove_file(file);
     text.filter(|value| !javascript_trim(value).is_empty())
 }
@@ -99,6 +105,17 @@ mod tests {
         assert_eq!(
             take_handoff(&file, SystemTime::UNIX_EPOCH, HANDOFF_MAX_AGE).as_deref(),
             Some("new")
+        );
+        assert!(!file.exists());
+    }
+
+    #[test]
+    fn invalid_utf8_is_replaced_like_node_utf8_decoding() {
+        let file = temporary_file();
+        std::fs::write(&file, b"invalid-\xff-handoff").expect("fixture");
+        assert_eq!(
+            take_handoff(&file, SystemTime::now(), HANDOFF_MAX_AGE).as_deref(),
+            Some("invalid-�-handoff")
         );
         assert!(!file.exists());
     }
