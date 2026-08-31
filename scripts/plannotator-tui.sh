@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Run the bundled plannotator-tui, or say clearly why it cannot run. Herdr invokes this for
-# the review pane and actions; the pane's cwd is the folder under review, so the binary is
-# located relative to this script, never to the cwd.
+# The review pane runs with the folder under review as cwd. Resolve the staged binary from this
+# script's plugin-root location instead.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
-if [ -x "$root/bin/plannotator-tui" ]; then
-  exec "$root/bin/plannotator-tui" "$@"
+if [ -x "$root/bin/plannotator-tui.exe" ]; then
+  exec "$root/bin/plannotator-tui.exe" "$@"
 fi
 msg="plannotator-tui is not installed. Reinstall the plugin: herdr plugin install plannotator/herdr-annotate"
 echo "$msg" >&2

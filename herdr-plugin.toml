@@ -44,10 +44,10 @@ command = ["bun", "src/manager.ts"]
 
 # ---------------------------------------------------------------------------------------
 # Document review with plannotator-tui (https://github.com/plannotator/plannotator-tui).
-# Commands resolve through $HERDR_PLUGIN_ROOT: the review pane is opened with --cwd set to
-# the folder under review, so a path relative to the plugin root would not resolve there.
-# A prebuilt binary is fetched into bin/ at build time; macOS and Linux for now. Where it
-# opens (overlay | split | popup) is the user's choice in ~/.config/plannotator-tui/config.toml.
+# Actions resolve explicit relative programs against $HERDR_PLUGIN_ROOT. The review pane is
+# opened with --cwd set to the folder under review, so it retains the plugin-root wrapper.
+# A prebuilt binary is fetched into bin/ at build time on macOS and Linux. Where it opens
+# (overlay | split | popup) remains the user's choice in plannotator-tui's config file.
 
 [[build]]
 platforms = ["macos", "linux"]
@@ -69,7 +69,7 @@ title = "Annotate: open here"
 description = "Review the focused pane's folder in plannotator-tui and send feedback to its agent."
 contexts = ["workspace", "pane"]
 platforms = ["macos", "linux"]
-command = ["sh", "-c", "exec bash \"$HERDR_PLUGIN_ROOT/scripts/plannotator-tui.sh\" herdr open"]
+command = ["./bin/plannotator-tui.exe", "herdr", "open"]
 
 [[actions]]
 id = "open-link"
@@ -77,7 +77,7 @@ title = "Annotate this file"
 description = "Open a Ctrl-clicked Markdown file in plannotator-tui."
 contexts = ["pane"]
 platforms = ["macos", "linux"]
-command = ["sh", "-c", "exec bash \"$HERDR_PLUGIN_ROOT/scripts/plannotator-tui.sh\" herdr open"]
+command = ["./bin/plannotator-tui.exe", "herdr", "open"]
 
 [[actions]]
 id = "last"
@@ -85,7 +85,7 @@ title = "Annotate: agent's last message"
 description = "Review the focused agent's most recent message in plannotator-tui and send feedback back."
 contexts = ["pane"]
 platforms = ["macos", "linux"]
-command = ["sh", "-c", "exec bash \"$HERDR_PLUGIN_ROOT/scripts/plannotator-tui.sh\" herdr last"]
+command = ["./bin/plannotator-tui.exe", "herdr", "last"]
 
 # Ctrl-click on a file:// Markdown link. Anchored on the scheme so web links never match.
 [[link_handlers]]
