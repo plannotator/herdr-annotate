@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Compatibility wrapper for released and local workflows. The current manifest invokes the
-# staged binary directly; remove this wrapper after one compatibility release.
+# Run the bundled plannotator-tui, or say clearly why it cannot run. Herdr invokes this for
+# the review pane and actions; the pane's cwd is the folder under review, so the binary is
+# located relative to this script, never to the cwd.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
-if [ -x "$root/bin/plannotator-tui.exe" ]; then
-  exec "$root/bin/plannotator-tui.exe" "$@"
+if [ -x "$root/bin/plannotator-tui" ]; then
+  exec "$root/bin/plannotator-tui" "$@"
 fi
 msg="plannotator-tui is not installed. Reinstall the plugin: herdr plugin install plannotator/herdr-annotate"
 echo "$msg" >&2

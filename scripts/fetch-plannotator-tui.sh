@@ -3,7 +3,7 @@
 # (cwd = plugin root) and by hand for local testing.
 #
 #   plannotator-tui.version        the release to install (one line, e.g. 0.1.0)
-#   bin/plannotator-tui.exe        the binary
+#   bin/plannotator-tui            the binary
 #   bin/plannotator-tui.version    what is installed; matching the pin means nothing to do
 #
 # Modes, in order:
@@ -19,21 +19,19 @@ cd "$(dirname "$0")/.."
 version="$(tr -d '[:space:]' < plannotator-tui.version)"
 [ -n "$version" ] || { echo "plannotator-tui.version is empty" >&2; exit 1; }
 mkdir -p bin
-destination="bin/plannotator-tui.exe"
-stamp="bin/plannotator-tui.version"
 installed="$(cat bin/plannotator-tui.version 2>/dev/null || true)"
 
-if [ -x "$destination" ] && [ "$installed" = "$version" ] && [ -z "${PLANNOTATOR_TUI_BIN:-}" ]; then
+if [ -x bin/plannotator-tui ] && [ "$installed" = "$version" ] && [ -z "${PLANNOTATOR_TUI_BIN:-}" ]; then
   echo "plannotator-tui $version already installed"
   exit 0
 fi
 
 if [ -n "${PLANNOTATOR_TUI_BIN:-}" ]; then
   [ -x "$PLANNOTATOR_TUI_BIN" ] || { echo "PLANNOTATOR_TUI_BIN is not an executable: $PLANNOTATOR_TUI_BIN" >&2; exit 1; }
-  rm -f "$destination"
-  cp "$PLANNOTATOR_TUI_BIN" "$destination"
-  chmod +x "$destination"
-  printf '%s' "$version" > "$stamp"
+  cp "$PLANNOTATOR_TUI_BIN" bin/plannotator-tui.tmp
+  chmod +x bin/plannotator-tui.tmp
+  mv bin/plannotator-tui.tmp bin/plannotator-tui
+  echo "$version" > bin/plannotator-tui.version
   echo "installed plannotator-tui from $PLANNOTATOR_TUI_BIN (local build, stamped $version)"
   exit 0
 fi
@@ -76,8 +74,6 @@ fi
 [ "$actual" = "$expected" ] || give_up "sha256 mismatch for $asset: expected $expected, got $actual"
 
 chmod +x "$tmp/$asset"
-rm -f "$destination"
-cp "$tmp/$asset" "$destination"
-chmod +x "$destination"
-printf '%s' "$version" > "$stamp"
+mv "$tmp/$asset" bin/plannotator-tui
+echo "$version" > bin/plannotator-tui.version
 echo "installed plannotator-tui $version ($target)"
