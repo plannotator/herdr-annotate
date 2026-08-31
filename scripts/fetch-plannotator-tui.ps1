@@ -28,14 +28,23 @@ function Install-PlannotatorTui {
   param([Parameter(Mandatory = $true)][string]$Source)
 
   $candidate = Join-Path $destinationDirectory ("plannotator-tui-" + [guid]::NewGuid() + ".tmp")
+  $backup = Join-Path $destinationDirectory ("plannotator-tui-" + [guid]::NewGuid() + ".bak")
+  $stampBackup = Join-Path $destinationDirectory ("plannotator-tui-version-" + [guid]::NewGuid() + ".bak")
+  $hadDestination = Test-Path -LiteralPath $destination -PathType Leaf
+  $hadStamp = Test-Path -LiteralPath $stamp -PathType Leaf
+  $replacementCompleted = $false
+  $keepRecoveryFiles = $false
   try {
+    if ($hadStamp) {
+      Copy-Item -LiteralPath $stamp -Destination $stampBackup
+    }
     Copy-Item -LiteralPath $Source -Destination $candidate
-    if (Test-Path -LiteralPath $destination -PathType Leaf) {
+    if ($hadDestination) {
       try {
         [System.IO.File]::Replace(
           [System.IO.Path]::GetFullPath($candidate),
           [System.IO.Path]::GetFullPath($destination),
-          $null
+          [System.IO.Path]::GetFullPath($backup)
         )
       } catch {
         throw "failed to replace ${destination}: $($_.Exception.Message)"
@@ -43,9 +52,40 @@ function Install-PlannotatorTui {
     } else {
       Move-Item -LiteralPath $candidate -Destination $destination
     }
+    $replacementCompleted = $true
     Set-Content -LiteralPath $stamp -NoNewline -Value $version
+  } catch {
+    $installFailure = $_
+    if ($replacementCompleted) {
+      try {
+        if ($hadDestination) {
+          Remove-Item -LiteralPath $destination -Force
+          Move-Item -LiteralPath $backup -Destination $destination
+        } else {
+          Remove-Item -LiteralPath $destination -Force
+        }
+        if ($hadStamp) {
+          Remove-Item -LiteralPath $stamp -Force -ErrorAction SilentlyContinue
+          Move-Item -LiteralPath $stampBackup -Destination $stamp
+        } else {
+          Remove-Item -LiteralPath $stamp -Force -ErrorAction SilentlyContinue
+        }
+        $replacementCompleted = $false
+      } catch {
+        $keepRecoveryFiles = $true
+        throw (
+          "$($installFailure.Exception.Message); rollback also failed: " +
+          $_.Exception.Message
+        )
+      }
+    }
+    throw $installFailure
   } finally {
     Remove-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue
+    if (-not $keepRecoveryFiles) {
+      Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
+      Remove-Item -LiteralPath $stampBackup -Force -ErrorAction SilentlyContinue
+    }
   }
 }
 
