@@ -526,8 +526,10 @@ mod tests {
             std::process::id()
         ));
         let dir = parent.join("state");
+        let reference = parent.join("reference");
         let _ = fs::remove_dir_all(&parent);
         fs::create_dir_all(&parent).expect("temporary parent");
+        fs::create_dir(&reference).expect("reference directory");
 
         assert!(load_annotations(&dir).expect("load").is_empty());
         assert_eq!(
@@ -536,7 +538,11 @@ mod tests {
                 .permissions()
                 .mode()
                 & 0o777,
-            0o755
+            fs::metadata(reference)
+                .expect("reference metadata")
+                .permissions()
+                .mode()
+                & 0o777
         );
         let _ = fs::remove_dir_all(parent);
     }
