@@ -1,7 +1,8 @@
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
-$version = [string](Get-Content -LiteralPath "plannotator-tui.version" -Raw)
+$versionContents = Get-Content -LiteralPath "plannotator-tui.version" -Raw
+$version = if ($null -eq $versionContents) { "" } else { [string]$versionContents }
 $version = $version.Trim()
 if (-not $version) { throw "plannotator-tui.version is empty" }
 
