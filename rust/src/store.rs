@@ -12,7 +12,8 @@ use uuid::Uuid;
 
 use crate::paths::{annotations_path, archives_path};
 use crate::types::{
-    Annotation, ArchivedAnnotationSet, parse_annotation, parse_archived_annotation_set,
+    Annotation, ArchivedAnnotationSet, InvocationContext, parse_annotation,
+    parse_archived_annotation_set,
 };
 
 const STALE_LOCK: Duration = Duration::from_secs(30);
@@ -74,6 +75,26 @@ pub fn load_annotations(dir: &Path) -> StoreResult<Vec<Annotation>> {
 
 /// Append one annotation without rewriting existing records.
 pub fn append_annotation(dir: &Path, annotation: &Annotation) -> StoreResult<()> {
+    append_annotation_record(dir, annotation)
+}
+
+/// Append using the property insertion order of TypeScript's invocation-context editor fallback.
+pub(crate) fn append_annotation_context_first(
+    dir: &Path,
+    annotation: &Annotation,
+) -> StoreResult<()> {
+    let context_first = ContextFirstAnnotation {
+        selected_text: &annotation.selected_text,
+        context: &annotation.context,
+        captured_at: &annotation.captured_at,
+        id: &annotation.id,
+        comment: &annotation.comment,
+        created_at: &annotation.created_at,
+    };
+    append_annotation_record(dir, &context_first)
+}
+
+fn append_annotation_record(dir: &Path, annotation: &impl Serialize) -> StoreResult<()> {
     with_store_lock(dir, StoreName::Annotations, || {
         let mut file = append_file(&annotations_path(dir))
             .map_err(|error| safe_file_error("Unable to save annotation", &error))?;
@@ -82,6 +103,17 @@ pub fn append_annotation(dir: &Path, annotation: &Annotation) -> StoreResult<()>
         writeln!(file, "{record}")
             .map_err(|error| safe_file_error("Unable to save annotation", &error))
     })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ContextFirstAnnotation<'a> {
+    selected_text: &'a str,
+    context: &'a InvocationContext,
+    captured_at: &'a str,
+    id: &'a str,
+    comment: &'a str,
+    created_at: &'a str,
 }
 
 /// Remove selected annotation IDs without racing concurrent annotation saves.
@@ -464,6 +496,21 @@ mod tests {
         assert_eq!(
             load_annotations(&dir).expect("load"),
             [annotation("two"), annotation("three")]
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn invocation_fallback_append_preserves_typescript_property_order() {
+        let dir = temporary_directory();
+        append_annotation_context_first(&dir, &annotation("one")).expect("append");
+        assert_eq!(
+            fs::read_to_string(annotations_path(&dir)).expect("record"),
+            concat!(
+                "{\"selectedText\":\"selection one\",\"context\":{},",
+                "\"capturedAt\":\"2026-08-08T00:00:00Z\",\"id\":\"one\",",
+                "\"comment\":\"comment one\",\"createdAt\":\"2026-08-08T00:00:01Z\"}\n"
+            )
         );
         let _ = fs::remove_dir_all(dir);
     }

@@ -16,7 +16,7 @@ use uuid::Uuid;
 use crate::format::{sanitize_terminal_text, wrap_text};
 use crate::layout::layout_comment;
 use crate::paths::state_dir;
-use crate::store::append_annotation;
+use crate::store::{append_annotation, append_annotation_context_first};
 use crate::types::{
     Annotation, PendingAnnotation, javascript_trim, parse_pending_annotation,
     pending_annotation_from_invocation,
@@ -32,17 +32,29 @@ const DEFAULT_ROWS: u16 = 22;
 #[derive(Debug)]
 pub struct EditorApp {
     pending: PendingAnnotation,
+    saved_field_order: SavedFieldOrder,
     comment: Vec<char>,
     cursor: usize,
     status: String,
     quit: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SavedFieldOrder {
+    CapturedAtThenContext,
+    ContextThenCapturedAt,
+}
+
 impl EditorApp {
     /// Start an empty comment for a captured selection.
     pub fn new(pending: PendingAnnotation) -> Self {
+        Self::with_field_order(pending, SavedFieldOrder::CapturedAtThenContext)
+    }
+
+    fn with_field_order(pending: PendingAnnotation, saved_field_order: SavedFieldOrder) -> Self {
         Self {
             pending,
+            saved_field_order,
             comment: Vec::new(),
             cursor: 0,
             status: String::new(),
@@ -254,7 +266,13 @@ impl EditorApp {
             value,
             now_iso(),
         );
-        match append_annotation(dir, &annotation) {
+        let saved = match self.saved_field_order {
+            SavedFieldOrder::CapturedAtThenContext => append_annotation(dir, &annotation),
+            SavedFieldOrder::ContextThenCapturedAt => {
+                append_annotation_context_first(dir, &annotation)
+            }
+        };
+        match saved {
             Ok(()) => {
                 "Saved.".clone_into(&mut self.status);
                 true
@@ -298,11 +316,12 @@ fn invocation_context() -> Value {
         .unwrap_or_else(|| Value::Object(serde_json::Map::new()))
 }
 
-fn pending_from_env() -> Result<PendingAnnotation, String> {
+fn pending_from_env() -> Result<(PendingAnnotation, SavedFieldOrder), String> {
     let invocation = invocation_context();
     let Some(path) = std::env::var_os("HERDR_ANNOTATE_PENDING").filter(|value| !value.is_empty())
     else {
         return pending_annotation_from_invocation(&invocation, now_iso())
+            .map(|pending| (pending, SavedFieldOrder::ContextThenCapturedAt))
             .ok_or_else(|| "Missing pending annotation".to_owned());
     };
     let path = std::path::PathBuf::from(path);
@@ -311,12 +330,13 @@ fn pending_from_env() -> Result<PendingAnnotation, String> {
     let pending = parse_pending_annotation(&decoded)
         .ok_or_else(|| "Pending annotation is invalid".to_owned())?;
     std::fs::remove_file(path).map_err(|error| error.to_string())?;
-    Ok(pending)
+    Ok((pending, SavedFieldOrder::CapturedAtThenContext))
 }
 
 /// Run the interactive editor pane from Herdr's environment.
 pub fn run() -> Result<(), String> {
-    let mut app = EditorApp::new(pending_from_env()?);
+    let (pending, saved_field_order) = pending_from_env()?;
+    let mut app = EditorApp::with_field_order(pending, saved_field_order);
     let dir = state_dir();
     let mut terminal = ratatui::init();
     let result = (|| -> Result<(), String> {
@@ -346,12 +366,16 @@ pub fn run() -> Result<(), String> {
 mod tests {
     #![allow(clippy::expect_used, reason = "tests assert by panicking")]
 
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
     use crate::types::InvocationContext;
 
     use super::*;
+
+    static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
 
     fn app() -> EditorApp {
         EditorApp::new(PendingAnnotation {
@@ -407,5 +431,33 @@ mod tests {
         let mut control = app();
         control.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
         assert!(control.quit);
+    }
+
+    #[test]
+    fn invocation_fallback_save_uses_its_typescript_property_order() {
+        let sequence = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "herdr-annotate-editor-{}-{sequence}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("temporary directory");
+        let mut editor = EditorApp::with_field_order(
+            PendingAnnotation {
+                selected_text: "selection".to_owned(),
+                context: InvocationContext::default(),
+                captured_at: "captured".to_owned(),
+            },
+            SavedFieldOrder::ContextThenCapturedAt,
+        );
+        editor.comment = "comment".chars().collect();
+        editor.cursor = editor.comment.len();
+
+        assert!(editor.save(Some(&dir)));
+        let saved = std::fs::read_to_string(dir.join("annotations.jsonl")).expect("saved record");
+        assert!(saved.starts_with(
+            "{\"selectedText\":\"selection\",\"context\":{},\"capturedAt\":\"captured\","
+        ));
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
