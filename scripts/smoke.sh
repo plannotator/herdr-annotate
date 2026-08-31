@@ -24,7 +24,7 @@ actions() { herdr plugin action list --plugin annotate | python3 -c "
 import json,sys; print(','.join(sorted(a['action_id'] for a in json.load(sys.stdin)['result']['actions'])))"; }
 bin_version() {
   local root; root="$(plugin_json | field "p['plugin_root']")"
-  local bin="$root/bin/plannotator-tui"; [ -x "$bin" ] && "$bin" --version | awk '{print $2}' || echo none
+  local bin="$root/bin/plannotator-tui.exe"; [ -x "$bin" ] && "$bin" --version | awk '{print $2}' || echo none
 }
 pin() { local root; root="$(plugin_json | field "p['plugin_root']")"; tr -d '[:space:]' < "$root/plannotator-tui.version" 2>/dev/null || echo none; }
 check() { if [ "$2" = "$3" ]; then echo "  ok   $1: $2"; else echo "  FAIL $1: got '$2', want '$3'" >&2; failures=$((failures+1)); fi; }
