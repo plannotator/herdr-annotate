@@ -29,8 +29,14 @@ fn current_user_id() -> String {
 }
 
 /// Return fresh, non-blank handed-off text and remove the file whether fresh or stale.
-pub fn take_handoff(file: &Path, now: SystemTime, max_age: Duration) -> Option<String> {
-    let metadata = std::fs::metadata(file).ok()?;
+pub fn take_handoff(
+    file: &Path,
+    now: SystemTime,
+    max_age: Duration,
+) -> Result<Option<String>, String> {
+    let Ok(metadata) = std::fs::metadata(file) else {
+        return Ok(None);
+    };
     let fresh = metadata.is_file()
         && metadata
             .modified()
@@ -42,12 +48,16 @@ pub fn take_handoff(file: &Path, now: SystemTime, max_age: Duration) -> Option<S
                 .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
         })
         .flatten();
-    let _ = std::fs::remove_file(file);
-    text.filter(|value| !javascript_trim(value).is_empty())
+    match std::fs::remove_file(file) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.to_string()),
+    }
+    Ok(text.filter(|value| !javascript_trim(value).is_empty()))
 }
 
 /// Take a selection from the default handoff file.
-pub fn take_default_handoff() -> Option<String> {
+pub fn take_default_handoff() -> Result<Option<String>, String> {
     take_handoff(&handoff_path(), SystemTime::now(), HANDOFF_MAX_AGE)
 }
 
@@ -92,7 +102,9 @@ mod tests {
         let file = temporary_file();
         std::fs::write(&file, "hello\nworld\n").expect("fixture");
         assert_eq!(
-            take_handoff(&file, SystemTime::now(), HANDOFF_MAX_AGE).as_deref(),
+            take_handoff(&file, SystemTime::now(), HANDOFF_MAX_AGE)
+                .expect("take")
+                .as_deref(),
             Some("hello\nworld\n")
         );
         assert!(!file.exists());
@@ -103,7 +115,9 @@ mod tests {
         let file = temporary_file();
         std::fs::write(&file, "new").expect("fixture");
         assert_eq!(
-            take_handoff(&file, SystemTime::UNIX_EPOCH, HANDOFF_MAX_AGE).as_deref(),
+            take_handoff(&file, SystemTime::UNIX_EPOCH, HANDOFF_MAX_AGE)
+                .expect("take")
+                .as_deref(),
             Some("new")
         );
         assert!(!file.exists());
@@ -114,7 +128,9 @@ mod tests {
         let file = temporary_file();
         std::fs::write(&file, b"invalid-\xff-handoff").expect("fixture");
         assert_eq!(
-            take_handoff(&file, SystemTime::now(), HANDOFF_MAX_AGE).as_deref(),
+            take_handoff(&file, SystemTime::now(), HANDOFF_MAX_AGE)
+                .expect("take")
+                .as_deref(),
             Some("invalid-�-handoff")
         );
         assert!(!file.exists());
@@ -130,18 +146,27 @@ mod tests {
                 SystemTime::now() + HANDOFF_MAX_AGE + Duration::from_secs(1),
                 HANDOFF_MAX_AGE
             ),
-            None
+            Ok(None)
         );
         assert!(!stale.exists());
         let blank = temporary_file();
         std::fs::write(&blank, "  \n").expect("fixture");
         assert_eq!(
             take_handoff(&blank, SystemTime::now(), HANDOFF_MAX_AGE),
-            None
+            Ok(None)
         );
         assert_eq!(
             take_handoff(&blank, SystemTime::now(), HANDOFF_MAX_AGE),
-            None
+            Ok(None)
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn removal_failure_is_reported_like_typescript() {
+        let directory = temporary_file();
+        std::fs::create_dir(&directory).expect("fixture directory");
+        assert!(take_handoff(&directory, SystemTime::now(), HANDOFF_MAX_AGE).is_err());
+        let _ = std::fs::remove_dir_all(directory.parent().expect("fixture parent"));
     }
 }

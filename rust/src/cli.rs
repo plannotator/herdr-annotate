@@ -59,7 +59,7 @@ fn capture() -> Result<(), String> {
     let dir = state_dir().ok_or_else(|| "HERDR_PLUGIN_STATE_DIR is not set".to_owned())?;
     let root = plugin_root().ok_or_else(|| "HERDR_PLUGIN_ROOT is not set".to_owned())?;
     if selected_text.is_none() {
-        selected_text = take_default_handoff();
+        selected_text = take_default_handoff()?;
     }
     if selected_text.is_none() {
         selected_text = Some(read_clipboard()?);
