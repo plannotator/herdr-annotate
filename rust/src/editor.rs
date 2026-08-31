@@ -330,8 +330,16 @@ fn pending_from_env() -> Result<(PendingAnnotation, SavedFieldOrder), String> {
     let decoded = serde_json::from_str::<Value>(&text).map_err(|error| error.to_string())?;
     let pending = parse_pending_annotation(&decoded)
         .ok_or_else(|| "Pending annotation is invalid".to_owned())?;
-    std::fs::remove_file(path).map_err(|error| error.to_string())?;
+    remove_pending_file(&path)?;
     Ok((pending, SavedFieldOrder::CapturedAtThenContext))
+}
+
+fn remove_pending_file(path: &Path) -> Result<(), String> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 /// Run the interactive editor pane from Herdr's environment.
@@ -468,5 +476,15 @@ mod tests {
             "{\"selectedText\":\"selection\",\"context\":{},\"capturedAt\":\"captured\","
         ));
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn pending_removal_is_forceful_like_typescript() {
+        let missing = std::env::temp_dir().join(format!(
+            "herdr-annotate-missing-pending-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&missing);
+        assert_eq!(remove_pending_file(&missing), Ok(()));
     }
 }
