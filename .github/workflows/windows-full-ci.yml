@@ -1,0 +1,61 @@
+name: windows-full-ci
+
+on:
+  pull_request:
+    paths:
+      - "herdr-plugin.toml"
+      - "plannotator-tui.version"
+      - "scripts/fetch-plannotator-tui.*"
+      - "scripts/plannotator-tui.sh"
+      - "scripts/smoke.sh"
+      - "scripts/test-fetch-plannotator-tui.*"
+      - "scripts/test-herdr-windows-plugin.ps1"
+      - "scripts/test-http-server.py"
+      - "scripts/test-windows-full-manifest.py"
+      - ".github/workflows/windows-full-ci.yml"
+  merge_group:
+
+concurrency:
+  group: windows-full-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows-full:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: local override and idempotence
+        run: ./scripts/test-fetch-plannotator-tui.ps1 -Case LocalOverride
+      - name: loopback download and checksum preservation
+        run: ./scripts/test-fetch-plannotator-tui.ps1 -Case Download
+      - uses: actions/checkout@v4
+        with:
+          repository: plannotator/plannotator-tui
+          ref: 3d0f671e50613eb2354226a76209df995c5b2437
+          path: plannotator-tui-source
+          persist-credentials: false
+      - name: manifest structure and development parity
+        run: |
+          python plannotator-tui-source/herdr/test-manifest.py
+          python scripts/test-windows-full-manifest.py `
+            plannotator-tui-source/herdr/herdr-plugin.toml
+      - name: pinned Herdr link and list
+        run: ./scripts/test-herdr-windows-plugin.ps1
+
+  unix-regression:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/test-fetch-plannotator-tui.sh
