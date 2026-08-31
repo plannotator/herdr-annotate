@@ -37,6 +37,7 @@ impl Termination {
         }
         #[cfg(not(unix))]
         {
+            let _ = self;
             false
         }
     }
