@@ -357,14 +357,6 @@ fn create_private_dir(path: &Path) -> std::io::Result<()> {
     fs::create_dir(path)
 }
 
-#[cfg(unix)]
-fn create_private_dir_all(path: &Path) -> std::io::Result<()> {
-    use std::os::unix::fs::DirBuilderExt;
-    let mut builder = fs::DirBuilder::new();
-    builder.recursive(true).mode(0o700).create(path)
-}
-
-#[cfg(not(unix))]
 fn create_private_dir_all(path: &Path) -> std::io::Result<()> {
     fs::create_dir_all(path)
 }
@@ -474,6 +466,32 @@ mod tests {
             [annotation("two"), annotation("three")]
         );
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn store_creation_uses_the_process_default_directory_mode() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let sequence = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
+        let parent = std::env::temp_dir().join(format!(
+            "herdr-annotate-store-parent-{}-{sequence}",
+            std::process::id()
+        ));
+        let dir = parent.join("state");
+        let _ = fs::remove_dir_all(&parent);
+        fs::create_dir_all(&parent).expect("temporary parent");
+
+        assert!(load_annotations(&dir).expect("load").is_empty());
+        assert_eq!(
+            fs::metadata(&dir)
+                .expect("state metadata")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o755
+        );
+        let _ = fs::remove_dir_all(parent);
     }
 
     #[test]
