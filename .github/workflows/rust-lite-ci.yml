@@ -5,6 +5,9 @@ on:
     paths:
       - "rust/**"
       - "lite-rs/**"
+      - "docs/rust-lite-parity-proof.md"
+      - "scripts/parity-lite.py"
+      - "scripts/parity-lite.sh"
       - "scripts/smoke-rust-lite.sh"
       - ".github/workflows/rust-lite-*.yml"
   merge_group:
@@ -44,3 +47,24 @@ jobs:
         with:
           workspaces: rust
       - run: cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
+
+  parity:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: bash scripts/parity-lite.sh
