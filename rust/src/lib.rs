@@ -15,5 +15,6 @@ pub mod types;
 pub mod width;
 
 mod cli;
+mod termination;
 
 pub use cli::run;

@@ -1,6 +1,7 @@
 //! Interactive annotation manager pane.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use chrono::{DateTime, Local};
 use ratatui::Frame;
@@ -25,6 +26,7 @@ use crate::store::{
     newest_first_annotations, newest_first_archived_sets, remove_annotations_by_id,
     remove_archived_set,
 };
+use crate::termination::Termination;
 use crate::types::{Annotation, ArchivedAnnotationSet};
 use crate::width::{string_width, truncate_to_width};
 
@@ -716,12 +718,20 @@ fn render_line(frame: &mut Frame<'_>, x: usize, y: usize, text: &str, width: usi
 pub fn run() -> Result<(), String> {
     let dir = state_dir().ok_or_else(|| "HERDR_PLUGIN_STATE_DIR is not set".to_owned())?;
     let mut app = ManagerApp::load(dir);
+    let termination = Termination::install();
     let mut terminal = ratatui::init();
     let result = (|| -> Result<(), String> {
-        while !app.quit {
+        while !app.quit && !termination.requested() {
             terminal
                 .draw(|frame| app.draw(frame))
                 .map_err(|error| error.to_string())?;
+            while !termination.requested()
+                && !event::poll(Duration::from_millis(50)).map_err(|error| error.to_string())?
+            {
+            }
+            if termination.requested() {
+                break;
+            }
             if let Event::Key(key) = event::read().map_err(|error| error.to_string())? {
                 app.handle_key(key);
             }

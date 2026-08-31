@@ -21,6 +21,7 @@ uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1", features = ["process"] }
+signal-hook = "0.3"
 
 [lints.rust]
 unsafe_code = "forbid"

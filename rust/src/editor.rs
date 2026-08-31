@@ -17,6 +17,7 @@ use crate::format::{sanitize_terminal_text, wrap_text};
 use crate::layout::layout_comment;
 use crate::paths::state_dir;
 use crate::store::{append_annotation, append_annotation_context_first};
+use crate::termination::Termination;
 use crate::types::{
     Annotation, PendingAnnotation, javascript_trim, parse_pending_annotation,
     pending_annotation_from_invocation,
@@ -338,12 +339,20 @@ pub fn run() -> Result<(), String> {
     let (pending, saved_field_order) = pending_from_env()?;
     let mut app = EditorApp::with_field_order(pending, saved_field_order);
     let dir = state_dir();
+    let termination = Termination::install();
     let mut terminal = ratatui::init();
     let result = (|| -> Result<(), String> {
-        while !app.quit {
+        while !app.quit && !termination.requested() {
             terminal
                 .draw(|frame| app.draw(frame))
                 .map_err(|error| error.to_string())?;
+            while !termination.requested()
+                && !event::poll(Duration::from_millis(50)).map_err(|error| error.to_string())?
+            {
+            }
+            if termination.requested() {
+                break;
+            }
             let event = event::read().map_err(|error| error.to_string())?;
             if let Event::Key(key) = event
                 && app.handle_key(key)
