@@ -36,15 +36,17 @@ if [ -n "${PLANNOTATOR_TUI_BIN:-}" ]; then
   exit 0
 fi
 
+windows_ext=""
 case "$(uname -s)/$(uname -m)" in
   Darwin/arm64)            target=aarch64-apple-darwin ;;
   Darwin/x86_64)           target=x86_64-apple-darwin ;;
   Linux/x86_64)            target=x86_64-unknown-linux-gnu ;;
   Linux/aarch64|Linux/arm64) target=aarch64-unknown-linux-gnu ;;
+  MINGW64*/x86_64|MSYS_NT*/x86_64|CYGWIN*/x86_64) target=x86_64-pc-windows-msvc; windows_ext=".exe" ;;
   *) echo "warning: no plannotator-tui build for $(uname -s)/$(uname -m); the review pane is unavailable" >&2; exit 0 ;;
 esac
 
-asset="plannotator-tui-$target"
+asset="plannotator-tui-$target$windows_ext"
 base="https://github.com/plannotator/plannotator-tui/releases/download/v$version"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
