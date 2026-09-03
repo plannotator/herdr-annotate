@@ -1081,8 +1081,11 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
     }
     editor_steps = [
         Step("chars", "alpha 한글 e\u0301".encode(), ("editor:chars",)),
+        Step("emoji", " 🇺🇸 👨‍👩‍👧‍👦".encode(), ("editor:chars",)),
         Step("enter", b"\r", ("editor:enter",)),
         Step("chars-second-line", b"beta", ("editor:chars",)),
+        Step("tab", b"\t", ("editor:tab",)),
+        Step("side-button-ignored", b"\x1b[<128;3;11M", ("editor:side-button",)),
         Step("home", b"\x1b[H", ("editor:home",)),
         Step("right", b"\x1b[C", ("editor:right",)),
         Step("delete", b"\x1b[3~", ("editor:delete",)),

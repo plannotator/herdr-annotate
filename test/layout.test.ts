@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { cursorAtEditorCell, editorGeometry, layoutComment } from "../src/layout";
+import {
+  cursorAtEditorCell,
+  editorGeometry,
+  editorViewportStart,
+  layoutComment,
+} from "../src/layout";
 
 const chars = (text: string): string[] => Array.from(text);
 
@@ -35,6 +40,13 @@ describe("layoutComment", () => {
     expect(result.cursorRow).toBe(1);
     expect(result.cursorCol).toBe(2);
   });
+
+  test("measures emoji grapheme clusters as terminal cells", () => {
+    for (const text of ["🇺🇸", "👨‍👩‍👧‍👦", "1️⃣"]) {
+      const comment = chars(text);
+      expect(layoutComment(comment, comment.length, 40).cursorCol).toBe(2);
+    }
+  });
 });
 
 describe("cursorAtEditorCell", () => {
@@ -63,6 +75,17 @@ describe("cursorAtEditorCell", () => {
     expect(cursorAtEditorCell(wide, 0, geometry.left + 1, geometry.editorTop, geometry)).toBe(2);
   });
 
+  test("returns only emoji grapheme boundaries", () => {
+    for (const text of ["🇺🇸", "👨‍👩‍👧‍👦", "1️⃣"]) {
+      const comment = chars(`${text}x`);
+      const boundary = chars(text).length;
+      expect(cursorAtEditorCell(comment, 0, geometry.left, geometry.editorTop, geometry)).toBe(0);
+      expect(cursorAtEditorCell(comment, 0, geometry.left + 1, geometry.editorTop, geometry)).toBe(
+        boundary,
+      );
+    }
+  });
+
   test("maps wrapped rows", () => {
     const narrow = editorGeometry(20, 12);
     const comment = chars("abcdefghijklmnopq");
@@ -77,11 +100,17 @@ describe("cursorAtEditorCell", () => {
     expect(cursorAtEditorCell(comment, 0, geometry.left + 4, geometry.editorTop + 1, geometry)).toBe(5);
   });
 
-  test("uses the pre-click cursor to preserve scroll offset", () => {
+  test("uses the explicit viewport to preserve scroll offset", () => {
     const comment = chars("a\nb\nc\nd");
     const scrolled = editorGeometry(20, 10);
-    expect(cursorAtEditorCell(comment, comment.length, scrolled.left, scrolled.editorTop, scrolled)).toBe(4);
-    expect(cursorAtEditorCell(comment, comment.length, scrolled.left, scrolled.editorTop + 1, scrolled)).toBe(6);
+    expect(cursorAtEditorCell(comment, 2, scrolled.left, scrolled.editorTop, scrolled)).toBe(4);
+    expect(cursorAtEditorCell(comment, 2, scrolled.left, scrolled.editorTop + 1, scrolled)).toBe(6);
+  });
+
+  test("keeps a clicked row visible without shifting the viewport", () => {
+    expect(editorViewportStart(3, 3, 5, 2)).toBe(3);
+    expect(editorViewportStart(3, 2, 5, 2)).toBe(2);
+    expect(editorViewportStart(1, 4, 5, 2)).toBe(3);
   });
 
   test("returns the buffer end for blank rows and rejects outside clicks", () => {
@@ -89,6 +118,27 @@ describe("cursorAtEditorCell", () => {
     expect(cursorAtEditorCell(comment, 0, geometry.left + 5, geometry.editorTop + 1, geometry)).toBe(1);
     expect(cursorAtEditorCell(comment, 0, geometry.left - 1, geometry.editorTop, geometry)).toBeUndefined();
     expect(cursorAtEditorCell(comment, 0, geometry.left, geometry.editorTop - 1, geometry)).toBeUndefined();
-    expect(cursorAtEditorCell(comment, 0, geometry.left + geometry.innerWidth, geometry.editorTop, geometry)).toBeUndefined();
+    expect(
+      cursorAtEditorCell(
+        comment,
+        0,
+        geometry.left + geometry.innerWidth + 1,
+        geometry.editorTop,
+        geometry,
+      ),
+    ).toBeUndefined();
+  });
+
+  test("maps the cursor gutter after a full-width line", () => {
+    const comment = chars("abcdefghijklmnop");
+    expect(
+      cursorAtEditorCell(
+        comment,
+        0,
+        geometry.left + geometry.innerWidth,
+        geometry.editorTop,
+        geometry,
+      ),
+    ).toBe(comment.length);
   });
 });

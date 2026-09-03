@@ -1,4 +1,4 @@
-import { charWidth } from "./width";
+import { graphemes, stringWidth } from "./width";
 
 export type EditorGeometry = {
   cols: number;
@@ -25,60 +25,82 @@ export function editorGeometry(cols: number, rows: number): EditorGeometry {
   };
 }
 
+type CommentGrapheme = {
+  text: string;
+  start: number;
+  end: number;
+  cells: number;
+};
+
+function commentGraphemes(comment: readonly string[]): CommentGrapheme[] {
+  const result: CommentGrapheme[] = [];
+  let start = 0;
+  for (const text of graphemes(comment.join(""))) {
+    let length = 0;
+    for (const _character of text) length += 1;
+    const end = start + length;
+    result.push({ text, start, end, cells: stringWidth(text) });
+    start = end;
+  }
+  return result;
+}
+
+export function editorViewportStart(
+  currentStart: number,
+  cursorRow: number,
+  lineCount: number,
+  visibleRows: number,
+): number {
+  const rows = Math.max(1, visibleRows);
+  const maxStart = Math.max(0, lineCount - rows);
+  const start = Math.min(currentStart, maxStart);
+  if (cursorRow < start) return cursorRow;
+  if (cursorRow >= start + rows) return cursorRow - rows + 1;
+  return start;
+}
+
 export function cursorAtEditorCell(
   comment: readonly string[],
-  currentCursor: number,
+  editorStart: number,
   x: number,
   y: number,
   geometry: EditorGeometry,
 ): number | undefined {
   if (
     x < geometry.left ||
-    x >= geometry.left + geometry.innerWidth ||
+    x > geometry.left + geometry.innerWidth ||
     y < geometry.editorTop ||
     y >= geometry.editorTop + geometry.editorRows
   ) {
     return undefined;
   }
 
-  const editing = layoutComment(comment, currentCursor, geometry.innerWidth);
-  const editorStart = Math.max(0, editing.cursorRow - geometry.editorRows + 1);
   const targetRow = editorStart + y - geometry.editorTop;
+  const editing = layoutComment(comment, comment.length, geometry.innerWidth);
   if (targetRow >= editing.lines.length) return comment.length;
 
   let row = 0;
   let col = 0;
   const targetCol = x - geometry.left;
-  for (let index = 0; index <= comment.length; index += 1) {
-    const char = comment[index];
-    const cells = char === undefined ? 0 : charWidth(char);
-    if (cells > 0 && col > 0 && col + cells > geometry.innerWidth) {
-      if (row === targetRow && targetCol >= col) return index;
+  for (const grapheme of commentGraphemes(comment)) {
+    if (grapheme.text === "\n") {
+      if (row === targetRow) return grapheme.start;
+      row += 1;
+      col = 0;
+      continue;
+    }
+    if (grapheme.cells > 0 && col > 0 && col + grapheme.cells > geometry.innerWidth) {
+      if (row === targetRow) return grapheme.start;
       row += 1;
       col = 0;
     }
     if (row === targetRow) {
-      if (index === comment.length || char === "\n") return index;
-      if (cells > 0 && targetCol >= col && targetCol < col + cells) {
-        if (cells === 2 && targetCol === col + 1) {
-          let next = index + 1;
-          while (next < comment.length) {
-            const trailing = comment[next];
-            if (trailing === undefined || trailing === "\n" || charWidth(trailing) > 0) break;
-            next += 1;
-          }
-          return next;
-        }
-        return index;
+      if (targetCol < col) return grapheme.start;
+      if (grapheme.cells > 0 && targetCol < col + grapheme.cells) {
+        return targetCol === col ? grapheme.start : grapheme.end;
       }
     }
-    if (index === comment.length) break;
-    if (char === "\n") {
-      row += 1;
-      col = 0;
-    } else {
-      col += cells;
-    }
+    col += grapheme.cells;
   }
   return comment.length;
 }
@@ -100,28 +122,32 @@ export function layoutComment(
   let col = 0;
   let cursorRow = 0;
   let cursorCol = 0;
-  for (let index = 0; index <= comment.length; index += 1) {
-    const cells = index < comment.length ? charWidth(comment[index] as string) : 0;
-    // A wide character must not straddle the right edge.
-    if (col > 0 && col + cells > safeWidth) {
+  for (const grapheme of commentGraphemes(comment)) {
+    if (col > 0 && col + grapheme.cells > safeWidth) {
       lines.push("");
       row += 1;
       col = 0;
     }
-    if (index === cursor) {
+    if (cursor === grapheme.start) {
       cursorRow = row;
       cursorCol = col;
     }
-    if (index === comment.length) break;
-    const char = comment[index] as string;
-    if (char === "\n") {
+    if (grapheme.text === "\n") {
       lines.push("");
       row += 1;
       col = 0;
-      continue;
+    } else {
+      lines[row] += grapheme.text;
+      col += grapheme.cells;
     }
-    lines[row] += char;
-    col += cells;
+    if (cursor > grapheme.start && cursor < grapheme.end) {
+      cursorRow = row;
+      cursorCol = col;
+    }
+  }
+  if (cursor >= comment.length) {
+    cursorRow = row;
+    cursorCol = col;
   }
   return { lines, cursorRow, cursorCol };
 }

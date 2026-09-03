@@ -1,7 +1,7 @@
 //! Terminal-safe text and Markdown export.
 
 use crate::types::Annotation;
-use crate::width::char_width;
+use crate::width::{graphemes, string_width};
 
 /// Remove terminal control characters while retaining useful whitespace.
 pub fn sanitize_terminal_text(text: &str) -> String {
@@ -34,14 +34,14 @@ pub fn wrap_text(text: &str, width: usize) -> Vec<String> {
         }
         let mut line = String::new();
         let mut used = 0;
-        for character in source_line.chars() {
-            let cells = char_width(character);
+        for grapheme in graphemes(source_line) {
+            let cells = string_width(grapheme);
             if used + cells > safe_width && !line.is_empty() {
                 output.push(line);
                 line = String::new();
                 used = 0;
             }
-            line.push(character);
+            line.push_str(grapheme);
             used += cells;
         }
         output.push(line);
@@ -137,6 +137,8 @@ mod tests {
         assert_eq!(wrap_text("한글한글", 4), ["한글", "한글"]);
         assert_eq!(wrap_text("한글한", 5), ["한글", "한"]);
         assert_eq!(wrap_text("a한b한", 4), ["a한b", "한"]);
+        assert_eq!(wrap_text("🇺🇸x", 2), ["🇺🇸", "x"]);
+        assert_eq!(wrap_text("a\u{1ab0}b", 1), ["a\u{1ab0}", "b"]);
     }
 
     #[test]

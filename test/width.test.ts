@@ -28,12 +28,20 @@ describe("stringWidth", () => {
     expect(stringWidth("한글abc")).toBe(7);
     expect(stringWidth("")).toBe(0);
   });
+
+  test("measures emoji grapheme clusters", () => {
+    for (const text of ["🇺🇸", "👨‍👩‍👧‍👦", "1️⃣"]) expect(stringWidth(text)).toBe(2);
+  });
 });
 
 describe("truncateToWidth", () => {
   test("never splits a wide character", () => {
     expect(truncateToWidth("한글", 3)).toBe("한");
     expect(truncateToWidth("한글", 4)).toBe("한글");
+  });
+
+  test("never splits an emoji grapheme cluster", () => {
+    expect(truncateToWidth("🇺🇸x", 2)).toBe("🇺🇸");
   });
 
   test("returns nothing when no cells are available", () => {

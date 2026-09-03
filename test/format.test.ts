@@ -6,6 +6,11 @@ describe("wrapText", () => {
   test("wraps and preserves explicit newlines", () => {
     expect(wrapText("abcdef\nxy", 3)).toEqual(["abc", "def", "xy"]);
   });
+
+  test("wraps on emoji grapheme boundaries", () => {
+    expect(wrapText("🇺🇸x", 2)).toEqual(["🇺🇸", "x"]);
+    expect(wrapText("a\u1ab0b", 1)).toEqual(["a\u1ab0", "b"]);
+  });
 });
 
 test("terminal display strips control characters", () => {

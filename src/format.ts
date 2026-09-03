@@ -1,5 +1,5 @@
 import type { Annotation } from "./types";
-import { charWidth } from "./width";
+import { graphemes, stringWidth } from "./width";
 
 /** Remove terminal control characters while retaining useful whitespace. */
 export function sanitizeTerminalText(text: string): string {
@@ -13,21 +13,20 @@ export function wrapText(text: string, width: number): string[] {
   const safeWidth = Math.max(1, width);
   const output: string[] = [];
   for (const sourceLine of text.replace(/\r\n/g, "\n").split("\n")) {
-    const chars = Array.from(sourceLine);
-    if (chars.length === 0) {
+    if (sourceLine.length === 0) {
       output.push("");
       continue;
     }
     let line = "";
     let used = 0;
-    for (const char of chars) {
-      const width = charWidth(char);
+    for (const grapheme of graphemes(sourceLine)) {
+      const width = stringWidth(grapheme);
       if (used + width > safeWidth && line !== "") {
         output.push(line);
         line = "";
         used = 0;
       }
-      line += char;
+      line += grapheme;
       used += width;
     }
     output.push(line);

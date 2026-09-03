@@ -513,6 +513,8 @@ dependencies = [
  "serde",
  "serde_json",
  "signal-hook",
+ "unicode-segmentation",
+ "unicode-width",
  "uuid",
 ]
 

@@ -6,10 +6,11 @@ use std::time::Duration;
 use chrono::{SecondsFormat, Utc};
 use ratatui::Frame;
 use ratatui::crossterm::event::{
-    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
-    KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
+    MouseEventKind,
 };
 use ratatui::crossterm::execute;
+use ratatui::crossterm::style::Print;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Line;
@@ -18,7 +19,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::format::{sanitize_terminal_text, wrap_text};
-use crate::layout::{cursor_at_visual_position, layout_comment};
+use crate::layout::{cursor_at_visual_position, editor_viewport_start, layout_comment};
 use crate::paths::state_dir;
 use crate::store::{append_annotation, append_annotation_context_first};
 use crate::termination::Termination;
@@ -26,7 +27,7 @@ use crate::types::{
     Annotation, PendingAnnotation, javascript_trim, parse_pending_annotation,
     pending_annotation_from_invocation,
 };
-use crate::width::{char_width, string_width, truncate_to_width};
+use crate::width::{graphemes, string_width, truncate_to_width};
 
 #[cfg(test)]
 const DEFAULT_COLS: u16 = 86;
@@ -40,6 +41,7 @@ pub struct EditorApp {
     saved_field_order: SavedFieldOrder,
     comment: Vec<char>,
     cursor: usize,
+    editor_start: usize,
     status: String,
     quit: bool,
 }
@@ -62,13 +64,14 @@ impl EditorApp {
             saved_field_order,
             comment: Vec::new(),
             cursor: 0,
+            editor_start: 0,
             status: String::new(),
             quit: false,
         }
     }
 
     /// Draw the same selected-text, comment, and footer regions as the TypeScript editor.
-    pub fn draw(&self, frame: &mut Frame<'_>) {
+    pub fn draw(&mut self, frame: &mut Frame<'_>) {
         let area = frame.area();
         frame.render_widget(Clear, area);
         let cols = usize::from(area.width.max(20));
@@ -83,9 +86,13 @@ impl EditorApp {
         );
         let selected = wrapped_selection.iter().take(selection_rows);
         let editing = layout_comment(&self.comment, self.cursor, inner_width);
-        let editor_start = editing
-            .cursor_row
-            .saturating_sub(editor_rows.saturating_sub(1));
+        self.editor_start = editor_viewport_start(
+            self.editor_start,
+            editing.cursor_row,
+            editing.lines.len(),
+            editor_rows,
+        );
+        let editor_start = self.editor_start;
 
         render_line(
             frame,
@@ -211,6 +218,7 @@ impl EditorApp {
                 }
             }
             KeyCode::Enter => self.insert('\n'),
+            KeyCode::Tab => self.insert(' '),
             KeyCode::Char(character)
                 if !key
                     .modifiers
@@ -236,16 +244,19 @@ impl EditorApp {
         let editor_top = 3 + selection_rows;
         let x = usize::from(mouse.column);
         let y = usize::from(mouse.row);
-        if x < left || x >= left + inner_width || y < editor_top || y >= editor_top + editor_rows {
+        if x < left || x > left + inner_width || y < editor_top || y >= editor_top + editor_rows {
             return;
         }
         let editing = layout_comment(&self.comment, self.cursor, inner_width);
-        let editor_start = editing
-            .cursor_row
-            .saturating_sub(editor_rows.saturating_sub(1));
+        self.editor_start = editor_viewport_start(
+            self.editor_start,
+            editing.cursor_row,
+            editing.lines.len(),
+            editor_rows,
+        );
         self.cursor = cursor_at_visual_position(
             &self.comment,
-            editor_start + y - editor_top,
+            self.editor_start + y - editor_top,
             x - left,
             inner_width,
         );
@@ -272,13 +283,13 @@ impl EditorApp {
             .map(|line| line.chars().count() + 1)
             .sum::<usize>();
         let mut used = 0;
-        for character in lines.get(target_row).copied().unwrap_or_default().chars() {
-            let width = char_width(character);
+        for grapheme in graphemes(lines.get(target_row).copied().unwrap_or_default()) {
+            let width = string_width(grapheme);
             if used + width > col {
                 break;
             }
             used += width;
-            next += 1;
+            next += grapheme.chars().count();
         }
         self.cursor = next;
     }
@@ -383,7 +394,8 @@ pub fn run() -> Result<(), String> {
     let termination = Termination::install();
     let mut terminal = ratatui::init();
     let result = (|| -> Result<(), String> {
-        execute!(std::io::stdout(), EnableMouseCapture).map_err(|error| error.to_string())?;
+        execute!(std::io::stdout(), Print("\x1b[?1000h\x1b[?1006h"))
+            .map_err(|error| error.to_string())?;
         while !app.quit && !termination.requested() {
             terminal
                 .draw(|frame| app.draw(frame))
@@ -395,7 +407,9 @@ pub fn run() -> Result<(), String> {
             if termination.requested() {
                 break;
             }
-            let event = event::read().map_err(|error| error.to_string())?;
+            let Ok(event) = event::read() else {
+                continue;
+            };
             match event {
                 Event::Key(key) if app.handle_key(key) && app.save(dir.as_deref()) => {
                     terminal
@@ -413,8 +427,8 @@ pub fn run() -> Result<(), String> {
         }
         Ok(())
     })();
-    let mouse_cleanup =
-        execute!(std::io::stdout(), DisableMouseCapture).map_err(|error| error.to_string());
+    let mouse_cleanup = execute!(std::io::stdout(), Print("\x1b[?1000l\x1b[?1006l"))
+        .map_err(|error| error.to_string());
     ratatui::restore();
     result.and(mouse_cleanup)
 }
@@ -451,7 +465,7 @@ mod tests {
         }
     }
 
-    fn draw(app: &EditorApp) -> Vec<String> {
+    fn draw(app: &mut EditorApp) -> Vec<String> {
         let mut terminal =
             Terminal::new(TestBackend::new(DEFAULT_COLS, DEFAULT_ROWS)).expect("terminal");
         terminal.draw(|frame| app.draw(frame)).expect("draw");
@@ -468,7 +482,7 @@ mod tests {
 
     #[test]
     fn headless_frame_contains_selection_editor_and_keys() {
-        let rows = draw(&app());
+        let rows = draw(&mut app());
         assert!(rows.iter().any(|row| row.contains("Selected text")));
         assert!(rows.iter().any(|row| row.contains("first selected line")));
         assert!(rows.iter().any(|row| row.contains("Comment")));
@@ -487,6 +501,13 @@ mod tests {
         let mut empty = app();
         assert!(!empty.save(None));
         assert_eq!(empty.status, "Write a comment before saving.");
+    }
+
+    #[test]
+    fn tab_inserts_a_renderable_space() {
+        let mut editor = app();
+        editor.handle_key(KeyEvent::from(KeyCode::Tab));
+        assert_eq!(editor.comment, [' ']);
     }
 
     #[test]
@@ -592,6 +613,7 @@ mod tests {
         scrolled.cursor = scrolled.comment.len();
         scrolled.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 2, 6), 20, 10);
         assert_eq!(scrolled.cursor, 18);
+        assert_eq!(scrolled.editor_start, 9);
     }
 
     #[test]
@@ -611,6 +633,19 @@ mod tests {
             22,
         );
         assert_eq!(editor.cursor, 4);
+    }
+
+    #[test]
+    fn mouse_click_reaches_a_full_width_line_end() {
+        let mut editor = app();
+        editor.comment = "abcdefghijklmnop".chars().collect();
+        editor.cursor = 0;
+        editor.handle_mouse(
+            mouse(MouseEventKind::Down(MouseButton::Left), 18, 6),
+            20,
+            10,
+        );
+        assert_eq!(editor.cursor, editor.comment.len());
     }
 
     #[test]
