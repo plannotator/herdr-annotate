@@ -5,6 +5,7 @@ import readline from "node:readline";
 import { sanitizeTerminalText, wrapText } from "./format";
 import { stateDir } from "./paths";
 import { layoutComment } from "./layout";
+import { lineEnd, lineStart, resolveEditKey, wordEnd, wordStart } from "./edit-keys";
 import { charWidth, stringWidth, truncateToWidth } from "./width";
 import type { StoreResult } from "./store";
 import {
@@ -177,7 +178,24 @@ process.stdin.on("keypress", (text: string, key: readline.Key) => {
     return;
   }
   if (key.name === "escape") return exit(0);
-  if (key.name === "backspace") {
+  const action = resolveEditKey(key);
+  if (action === "word-left") {
+    cursor = wordStart(comment, cursor);
+  } else if (action === "word-right") {
+    cursor = wordEnd(comment, cursor);
+  } else if (action === "line-start") {
+    cursor = lineStart(comment, cursor);
+  } else if (action === "line-end") {
+    cursor = lineEnd(comment, cursor);
+  } else if (action === "delete-word") {
+    const start = wordStart(comment, cursor);
+    comment.splice(start, cursor - start);
+    cursor = start;
+  } else if (action === "delete-line") {
+    const start = lineStart(comment, cursor);
+    comment.splice(start, cursor - start);
+    cursor = start;
+  } else if (key.name === "backspace") {
     if (cursor > 0) comment.splice(--cursor, 1);
   } else if (key.name === "delete") {
     if (cursor < comment.length) comment.splice(cursor, 1);
