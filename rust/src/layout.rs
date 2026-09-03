@@ -50,6 +50,57 @@ pub fn layout_comment(comment: &[char], cursor: usize, width: usize) -> CommentL
     }
 }
 
+pub fn cursor_at_visual_position(
+    comment: &[char],
+    row: usize,
+    column: usize,
+    width: usize,
+) -> usize {
+    let safe_width = width.max(1);
+    let mut visual_row = 0;
+    let mut visual_column = 0;
+
+    for (index, character) in comment.iter().copied().enumerate() {
+        let cells = char_width(character);
+        if character == '\n' {
+            if visual_row == row {
+                return index;
+            }
+            visual_row += 1;
+            visual_column = 0;
+            continue;
+        }
+        if visual_column > 0 && visual_column + cells > safe_width {
+            if visual_row == row {
+                return index;
+            }
+            visual_row += 1;
+            visual_column = 0;
+        }
+        if visual_row == row {
+            if column < visual_column {
+                return index;
+            }
+            if cells > 0 && column < visual_column + cells {
+                if cells == 2 && column == visual_column + 1 {
+                    let mut next = index + 1;
+                    while let Some(trailing) = comment.get(next).copied() {
+                        if trailing == '\n' || char_width(trailing) > 0 {
+                            break;
+                        }
+                        next += 1;
+                    }
+                    return next;
+                }
+                return index;
+            }
+        }
+        visual_column += cells;
+    }
+
+    comment.len()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -79,5 +130,32 @@ mod tests {
         let result = layout_comment(&comment, comment.len(), 40);
         assert_eq!(result.lines, ["한", "글"]);
         assert_eq!((result.cursor_row, result.cursor_col), (1, 2));
+    }
+    #[test]
+    fn cursor_mapping_uses_glyph_cell_boundaries_and_wraps() {
+        let comment = "a한b".chars().collect::<Vec<_>>();
+        assert_eq!(cursor_at_visual_position(&comment, 0, 0, 3), 0);
+        assert_eq!(cursor_at_visual_position(&comment, 0, 1, 3), 1);
+        assert_eq!(cursor_at_visual_position(&comment, 0, 2, 3), 2);
+        assert_eq!(cursor_at_visual_position(&comment, 0, 3, 3), 2);
+        assert_eq!(cursor_at_visual_position(&comment, 1, 0, 3), 2);
+    }
+
+    #[test]
+    fn cursor_mapping_keeps_combining_marks_with_their_base_glyph() {
+        let narrow = "a\u{301}b".chars().collect::<Vec<_>>();
+        assert_eq!(cursor_at_visual_position(&narrow, 0, 1, 8), 2);
+        let wide = "한\u{301}b".chars().collect::<Vec<_>>();
+        assert_eq!(cursor_at_visual_position(&wide, 0, 1, 8), 2);
+    }
+
+    #[test]
+    fn cursor_mapping_preserves_explicit_newlines_and_blank_rows() {
+        let comment = "a\n\nb".chars().collect::<Vec<_>>();
+        assert_eq!(cursor_at_visual_position(&comment, 0, 4, 8), 1);
+        assert_eq!(cursor_at_visual_position(&comment, 1, 0, 8), 2);
+        assert_eq!(cursor_at_visual_position(&comment, 2, 0, 8), 3);
+        assert_eq!(cursor_at_visual_position(&comment, 2, 1, 8), 4);
+        assert_eq!(cursor_at_visual_position(&comment, 3, 0, 8), comment.len());
     }
 }

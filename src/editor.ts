@@ -4,7 +4,8 @@ import fs from "node:fs";
 import readline from "node:readline";
 import { sanitizeTerminalText, wrapText } from "./format";
 import { stateDir } from "./paths";
-import { layoutComment } from "./layout";
+import { cursorAtEditorCell, editorGeometry, layoutComment } from "./layout";
+import { SgrMouseDecoder } from "./mouse";
 import { charWidth, stringWidth, truncateToWidth } from "./width";
 import type { StoreResult } from "./store";
 import {
@@ -75,34 +76,30 @@ function writeAt(row: number, col: number, text: string): void {
 }
 
 function render(): void {
-  const cols = Math.max(20, process.stdout.columns || 86);
-  const rows = Math.max(10, process.stdout.rows || 22);
-  const left = 3;
-  const innerWidth = Math.max(1, cols - 4);
-  const selectionRows = Math.max(3, Math.min(7, Math.floor((rows - 6) / 2)));
-  const editorRows = Math.max(1, rows - selectionRows - 5);
-  const wrappedSelection = wrapText(sanitizeTerminalText(pending.selectedText), innerWidth);
-  const selected = wrappedSelection.slice(0, selectionRows);
-  const editing = layoutComment(comment, cursor, innerWidth);
-  const editorStart = Math.max(0, editing.cursorRow - editorRows + 1);
-  const visibleEditor = editing.lines.slice(editorStart, editorStart + editorRows);
+  const geometry = editorGeometry(process.stdout.columns || 86, process.stdout.rows || 22);
+  const left = geometry.left + 1;
+  const wrappedSelection = wrapText(sanitizeTerminalText(pending.selectedText), geometry.innerWidth);
+  const selected = wrappedSelection.slice(0, geometry.selectionRows);
+  const editing = layoutComment(comment, cursor, geometry.innerWidth);
+  const editorStart = Math.max(0, editing.cursorRow - geometry.editorRows + 1);
+  const visibleEditor = editing.lines.slice(editorStart, editorStart + geometry.editorRows);
 
   out("\x1b[2J\x1b[H\x1b[?25l");
   writeAt(2, left, "\x1b[1mSelected text\x1b[0m");
   selected.forEach((line, index) => writeAt(3 + index, left, `\x1b[2m${line}\x1b[0m`));
-  if (wrappedSelection.length > selectionRows) {
-    writeAt(2 + selectionRows, left + innerWidth - 1, "\x1b[2m…\x1b[0m");
+  if (wrappedSelection.length > geometry.selectionRows) {
+    writeAt(2 + geometry.selectionRows, left + geometry.innerWidth - 1, "\x1b[2m…\x1b[0m");
   }
 
-  const commentTitleRow = 3 + selectionRows;
+  const commentTitleRow = geometry.editorTop;
   writeAt(commentTitleRow, left, "\x1b[1mComment\x1b[0m");
   visibleEditor.forEach((line, index) => writeAt(commentTitleRow + 1 + index, left, line));
 
   const footer = status || "Ctrl+S save  ·  Esc cancel  ·  Enter new line";
-  writeAt(rows, left, `\x1b[2m${truncateToWidth(footer, innerWidth)}\x1b[0m`);
+  writeAt(geometry.rows, left, `\x1b[2m${truncateToWidth(footer, geometry.innerWidth)}\x1b[0m`);
 
   const visualCursorRow = editing.cursorRow - editorStart;
-  if (visualCursorRow >= 0 && visualCursorRow < editorRows) {
+  if (visualCursorRow >= 0 && visualCursorRow < geometry.editorRows) {
     writeAt(commentTitleRow + 1 + visualCursorRow, left + editing.cursorCol, "\x1b[?25h");
   }
 }
@@ -111,7 +108,7 @@ function cleanup(): void {
   if (finished) return;
   finished = true;
   if (process.stdin.isTTY) process.stdin.setRawMode(false);
-  out("\x1b[?25h\x1b[2J\x1b[H\x1b[?1049l");
+  out("\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[2J\x1b[H\x1b[?1049l");
 }
 
 function exit(code: number): void {
@@ -169,7 +166,37 @@ process.stdout.on("resize", render);
 readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 20 } as any);
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
 process.stdin.resume();
+const mouseDecoder = new SgrMouseDecoder();
 process.stdin.on("keypress", (text: string, key: readline.Key) => {
+  const mouseInput = mouseDecoder.feed(key.sequence ?? text);
+  if (mouseInput.intercepted) {
+    let handled = false;
+    for (const report of mouseInput.reports) {
+      if (
+        report.action !== "press" ||
+        (report.button & 3) !== 0 ||
+        (report.button & 32) !== 0 ||
+        (report.button & 64) !== 0
+      ) continue;
+      const geometry = editorGeometry(process.stdout.columns || 86, process.stdout.rows || 22);
+      const nextCursor = cursorAtEditorCell(
+        comment,
+        cursor,
+        report.x - 1,
+        report.y - 1,
+        geometry,
+      );
+      if (nextCursor !== undefined) {
+        cursor = nextCursor;
+        handled = true;
+      }
+    }
+    if (handled) {
+      status = "";
+      render();
+    }
+    return;
+  }
   status = "";
   if (key.ctrl && key.name === "c") return exit(0);
   if (key.ctrl && key.name === "s") {
@@ -204,5 +231,5 @@ process.stdin.on("keypress", (text: string, key: readline.Key) => {
   render();
 });
 
-out("\x1b[?1049h");
+out("\x1b[?1049h\x1b[?1000h\x1b[?1006h");
 render();

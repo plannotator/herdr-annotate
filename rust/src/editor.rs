@@ -5,7 +5,11 @@ use std::time::Duration;
 
 use chrono::{SecondsFormat, Utc};
 use ratatui::Frame;
-use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
+    KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
+use ratatui::crossterm::execute;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Line;
@@ -14,7 +18,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::format::{sanitize_terminal_text, wrap_text};
-use crate::layout::layout_comment;
+use crate::layout::{cursor_at_visual_position, layout_comment};
 use crate::paths::state_dir;
 use crate::store::{append_annotation, append_annotation_context_first};
 use crate::termination::Termination;
@@ -219,6 +223,35 @@ impl EditorApp {
         false
     }
 
+    pub fn handle_mouse(&mut self, mouse: MouseEvent, width: u16, height: u16) {
+        let MouseEventKind::Down(MouseButton::Left) = mouse.kind else {
+            return;
+        };
+        let cols = usize::from(width.max(20));
+        let rows = usize::from(height.max(10));
+        let left = 2usize;
+        let inner_width = cols.saturating_sub(4).max(1);
+        let selection_rows = ((rows.saturating_sub(6)) / 2).clamp(3, 7);
+        let editor_rows = rows.saturating_sub(selection_rows + 5).max(1);
+        let editor_top = 3 + selection_rows;
+        let x = usize::from(mouse.column);
+        let y = usize::from(mouse.row);
+        if x < left || x >= left + inner_width || y < editor_top || y >= editor_top + editor_rows {
+            return;
+        }
+        let editing = layout_comment(&self.comment, self.cursor, inner_width);
+        let editor_start = editing
+            .cursor_row
+            .saturating_sub(editor_rows.saturating_sub(1));
+        self.cursor = cursor_at_visual_position(
+            &self.comment,
+            editor_start + y - editor_top,
+            x - left,
+            inner_width,
+        );
+        self.status.clear();
+    }
+
     fn insert(&mut self, character: char) {
         self.comment.insert(self.cursor, character);
         self.cursor += 1;
@@ -350,6 +383,7 @@ pub fn run() -> Result<(), String> {
     let termination = Termination::install();
     let mut terminal = ratatui::init();
     let result = (|| -> Result<(), String> {
+        execute!(std::io::stdout(), EnableMouseCapture).map_err(|error| error.to_string())?;
         while !app.quit && !termination.requested() {
             terminal
                 .draw(|frame| app.draw(frame))
@@ -362,21 +396,27 @@ pub fn run() -> Result<(), String> {
                 break;
             }
             let event = event::read().map_err(|error| error.to_string())?;
-            if let Event::Key(key) = event
-                && app.handle_key(key)
-                && app.save(dir.as_deref())
-            {
-                terminal
-                    .draw(|frame| app.draw(frame))
-                    .map_err(|error| error.to_string())?;
-                std::thread::sleep(Duration::from_millis(250));
-                app.quit = true;
+            match event {
+                Event::Key(key) if app.handle_key(key) && app.save(dir.as_deref()) => {
+                    terminal
+                        .draw(|frame| app.draw(frame))
+                        .map_err(|error| error.to_string())?;
+                    std::thread::sleep(Duration::from_millis(250));
+                    app.quit = true;
+                }
+                Event::Mouse(mouse) => {
+                    let size = terminal.size().map_err(|error| error.to_string())?;
+                    app.handle_mouse(mouse, size.width, size.height);
+                }
+                _ => {}
             }
         }
         Ok(())
     })();
+    let mouse_cleanup =
+        execute!(std::io::stdout(), DisableMouseCapture).map_err(|error| error.to_string());
     ratatui::restore();
-    result
+    result.and(mouse_cleanup)
 }
 
 #[cfg(test)]
@@ -400,6 +440,15 @@ mod tests {
             context: InvocationContext::default(),
             captured_at: "captured".to_owned(),
         })
+    }
+
+    fn mouse(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }
     }
 
     fn draw(app: &EditorApp) -> Vec<String> {
@@ -486,5 +535,104 @@ mod tests {
         ));
         let _ = std::fs::remove_file(&missing);
         assert_eq!(remove_pending_file(&missing), Ok(()));
+    }
+
+    #[test]
+    fn mouse_clicks_map_narrow_and_wide_glyph_cells() {
+        let mut editor = app();
+        editor.comment = "a한b".chars().collect();
+        editor.cursor = editor.comment.len();
+        editor.handle_mouse(
+            mouse(MouseEventKind::Down(MouseButton::Left), 2, 10),
+            86,
+            22,
+        );
+        assert_eq!(editor.cursor, 0);
+        editor.handle_mouse(
+            mouse(MouseEventKind::Down(MouseButton::Left), 3, 10),
+            86,
+            22,
+        );
+        assert_eq!(editor.cursor, 1);
+        editor.handle_mouse(
+            mouse(MouseEventKind::Down(MouseButton::Left), 4, 10),
+            86,
+            22,
+        );
+        assert_eq!(editor.cursor, 2);
+        editor.handle_mouse(
+            mouse(MouseEventKind::Down(MouseButton::Left), 6, 10),
+            86,
+            22,
+        );
+        assert_eq!(editor.cursor, 3);
+    }
+
+    #[test]
+    fn mouse_clicks_map_wraps_and_preserve_the_pre_click_scroll_offset() {
+        let mut wrapped = app();
+        wrapped.comment = format!("{}한", "a".repeat(15)).chars().collect();
+        wrapped.cursor = wrapped.comment.len();
+        wrapped.handle_mouse(
+            mouse(MouseEventKind::Down(MouseButton::Left), 17, 6),
+            20,
+            10,
+        );
+        assert_eq!(wrapped.cursor, 15);
+        wrapped.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 2, 7), 20, 10);
+        assert_eq!(wrapped.cursor, 15);
+
+        let mut scrolled = app();
+        scrolled.comment = (0..11)
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
+            .chars()
+            .collect();
+        scrolled.cursor = scrolled.comment.len();
+        scrolled.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 2, 6), 20, 10);
+        assert_eq!(scrolled.cursor, 18);
+    }
+
+    #[test]
+    fn mouse_clicks_map_explicit_newlines_and_buffer_end() {
+        let mut editor = app();
+        editor.comment = "a\n\nb".chars().collect();
+        editor.cursor = editor.comment.len();
+        editor.handle_mouse(
+            mouse(MouseEventKind::Down(MouseButton::Left), 2, 11),
+            86,
+            22,
+        );
+        assert_eq!(editor.cursor, 2);
+        editor.handle_mouse(
+            mouse(MouseEventKind::Down(MouseButton::Left), 2, 13),
+            86,
+            22,
+        );
+        assert_eq!(editor.cursor, 4);
+    }
+
+    #[test]
+    fn mouse_releases_other_kinds_and_outside_clicks() {
+        let mut editor = app();
+        editor.comment = "abc".chars().collect();
+        editor.cursor = 1;
+        for kind in [
+            MouseEventKind::Up(MouseButton::Left),
+            MouseEventKind::Drag(MouseButton::Left),
+            MouseEventKind::Moved,
+            MouseEventKind::ScrollDown,
+            MouseEventKind::Down(MouseButton::Right),
+        ] {
+            editor.handle_mouse(mouse(kind, 2, 10), 86, 22);
+        }
+        editor.handle_mouse(
+            mouse(MouseEventKind::Down(MouseButton::Left), 1, 10),
+            86,
+            22,
+        );
+        editor.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 2, 9), 86, 22);
+        assert_eq!(editor.cursor, 1);
     }
 }
