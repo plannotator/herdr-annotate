@@ -54,7 +54,7 @@ trap restore EXIT
 
 echo "== fresh install: full"
 install "$spec"
-check "actions" "$(actions)" "capture,copy-context,last,manage,open,open-link"
+check "actions" "$(actions)" "capture,copy-archive,copy-context,last,manage,open,open-link"
 check "binary matches pin" "$(bin_version)" "$(pin)"
 
 echo "== review pane opens with --cwd (the #7 regression)"
@@ -81,12 +81,12 @@ check "binary replaced on upgrade" "$(bin_version)" "$(pin)"
 
 echo "== fresh install: lite"
 install "$spec/lite"
-check "actions" "$(actions)" "capture,copy-context,manage"
+check "actions" "$(actions)" "capture,copy-archive,copy-context,manage"
 check "no binary" "$(bin_version)" "none"
 
 echo "== swap: lite -> full"
 install "$spec"
-check "actions" "$(actions)" "capture,copy-context,last,manage,open,open-link"
+check "actions" "$(actions)" "capture,copy-archive,copy-context,last,manage,open,open-link"
 check "binary" "$(bin_version)" "$(pin)"
 
 echo "== result: $failures failure(s)"

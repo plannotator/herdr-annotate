@@ -63,12 +63,12 @@ check "plugin root" "$(printf '%s' "$installed" | field "p['plugin_root']")" "$r
 actions="$(herdr plugin action list --plugin annotate | python3 -c '
 import json,sys
 print(",".join(sorted(a["action_id"] for a in json.load(sys.stdin)["result"]["actions"])))')"
-check "actions" "$actions" "capture,copy-context,manage"
+check "actions" "$actions" "capture,copy-archive,copy-context,manage"
 commands="$(printf '%s' "$installed" | python3 -c '
 import json,sys
 p=json.load(sys.stdin)
 print(",".join(sorted(a["command"][0] for a in p["actions"])))')"
-check "native action commands" "$commands" "./bin/herdr-annotate.exe,./bin/herdr-annotate.exe,./bin/herdr-annotate.exe"
+check "native action commands" "$commands" "./bin/herdr-annotate.exe,./bin/herdr-annotate.exe,./bin/herdr-annotate.exe,./bin/herdr-annotate.exe"
 check "bundled binary" "$("$root/lite-rs/bin/herdr-annotate.exe" --version)" "herdr-annotate $(tr -d '[:space:]' < "$root/lite-rs/herdr-annotate.version")"
 
 echo "== manager pane renders in $HERDR_SESSION"
