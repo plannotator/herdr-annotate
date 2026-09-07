@@ -11,6 +11,9 @@ separately so test coverage is not confused with behavior observed inside Herdr.
   JSON is mode 0600; pane-open failure removes it.
 - [x] `export.ts` → `herdr-annotate copy-context`: loads newest first, formats Markdown, copies, and
   sends the same singular/plural notifications and errors.
+- [x] `export-archive.ts` → `herdr-annotate copy-archive`: injects the dependencies `manager.ts` passes
+  to `copyAndArchiveAnnotations`, maps the three outcomes to the same notifications, and exits 0 on an
+  empty store and 1 on a real failure.
 - [x] `open-manager.ts` → `herdr-annotate manage`: requires `HERDR_PLUGIN_ROOT` and opens the same
   focused 100×30 popup.
 - [x] `editor.ts` → `herdr-annotate editor`: pending-file and invocation-context fallback, delete-on-
@@ -21,6 +24,8 @@ separately so test coverage is not confused with behavior observed inside Herdr.
   permanent archive deletion, reload, status messages, Esc/Tab/q/Ctrl+C behavior.
 - [x] `lite-rs/herdr-plugin.toml` preserves plugin id `annotate`, action ids, pane ids, placements,
   dimensions, contexts, and supported platform declarations. All commands are the one native binary.
+  `scripts/parity-lite.py` compares those declarations against `lite/herdr-plugin.toml` and the root
+  Full manifest field by field.
 
 ## Modules and compatibility boundaries
 
@@ -57,6 +62,7 @@ document-anchor/API wire shape, not Lite's existing terminal-selection JSONL sha
 | `test/layout.test.ts` | `layout::tests` (3 grouped tests covering every assertion) |
 | `test/store.test.ts` | `store::tests` (6 tests) |
 | `test/archive-workflow.test.ts` | `archive_workflow::tests` (8 tests) |
+| `test/export-archive.test.ts` | `cli::tests::copy_archive_maps_every_outcome_to_its_notification_and_exit_status` |
 | `test/manager-copy.test.ts` | `manager_copy::tests` (3 tests) |
 
 Additional Rust-only coverage:

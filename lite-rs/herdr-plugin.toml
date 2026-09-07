@@ -34,6 +34,13 @@ contexts = ["global"]
 command = ["./bin/herdr-annotate.exe", "copy-context"]
 
 [[actions]]
+id = "copy-archive"
+title = "Copy annotations as context and archive them"
+description = "Copy all saved annotations to the clipboard as Markdown, then archive them."
+contexts = ["global"]
+command = ["./bin/herdr-annotate.exe", "copy-archive"]
+
+[[actions]]
 id = "manage"
 title = "Manage annotations"
 description = "Browse, copy, archive, restore, and delete annotations."

@@ -69,6 +69,12 @@ command = "annotate.copy-context"
 description = "copy annotations as context"
 
 [[keys.command]]
+key = "prefix+ctrl+a"
+type = "plugin_action"
+command = "annotate.copy-archive"
+description = "copy annotations as context and archive them"
+
+[[keys.command]]
 key = "prefix+m"
 type = "plugin_action"
 command = "annotate.manage"
@@ -107,6 +113,12 @@ command = "annotate.copy-context"
 description = "copy annotations as context"
 
 [[keys.command]]
+key = "prefix+ctrl+a"
+type = "plugin_action"
+command = "annotate.copy-archive"
+description = "copy annotations as context and archive them"
+
+[[keys.command]]
 key = "prefix+m"
 type = "plugin_action"
 command = "annotate.manage"
@@ -130,6 +142,7 @@ herdr server reload-config
 |---|---|
 | `Ctrl+B A` | comment on the selected text · `Ctrl+S` saves |
 | `Ctrl+B Shift+A` | copy all annotations as Markdown |
+| `Ctrl+B Ctrl+A` | copy all annotations as Markdown, then archive them |
 | `Ctrl+B M` | manage · `y` copy one · `c` copy all · `Shift+C` copy and archive · `Tab` archives (`y` copy · `u` restore · `d d` delete) |
 
 ### Review documents and agent replies

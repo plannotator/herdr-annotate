@@ -5,7 +5,7 @@ TypeScript Lite surface to the Rust call path at function granularity and names 
 case that compares the result. The current local result is:
 
 ```text
-Parity Lite: 401 observables compared, 92 screens diffed, zero divergences / 1 deliberate
+Parity Lite: 459 observables compared, 92 screens diffed, zero divergences / 1 deliberate
 ```
 
 Run it from the repository root with `bash scripts/parity-lite.sh`. The shell wrapper stages a fresh
@@ -17,21 +17,24 @@ diffs and prints their path. A green run removes its temporary workspace.
 
 - Process cases compare exit code, stdout, stderr, every fake `herdr`/clipboard command and argument,
   notification arguments, clipboard bytes, pending bytes and mode, and resulting filesystem trees.
+- Manifest cases parse `lite/herdr-plugin.toml`, `lite-rs/herdr-plugin.toml`, and the root Full
+  manifest and compare the declared entrypoints field by field, so a new action cannot reach one
+  runtime only.
 - Screen cases use real PTYs at 86×22 (editor) and 98×28 (manager). The ANSI parser at
-  `scripts/parity-lite.py:146` ignores style escapes but retains the terminal cell grid, including
+  `scripts/parity-lite.py:156` ignores style escapes but retains the terminal cell grid, including
   wide-character continuation cells. It snapshots the initial frame and the frame after every input.
 - Store cases byte-compare JSONL, modes, and leftover lock/temp files after scripted editor and
   manager mutations. `store.cross-read` makes Bun export the Rust editor's store and Rust export the
   Bun editor's store, then compares the Markdown and subprocess traces.
 - The only normalized values are each case's deliberately different temporary root, generated UUIDs,
   generated ISO timestamps, and pid/time components in pending and temporary filenames
-  (`scripts/parity-lite.py:446`). Seed timestamps are allow-listed and remain literal. Product files
+  (`scripts/parity-lite.py:459`). Seed timestamps are allow-listed and remain literal. Product files
   are never rewritten or filtered. Screen cells and clipboard bytes are never normalized.
 - The harness runs on the host's real adapter branch. macOS therefore proves `pbpaste`/`pbcopy` and
   Ubuntu proves the Wayland → xclip → xsel chain. Windows is intentionally outside this PTY harness
   and remains in the separate build/promotion track.
 
-The parity surface is the five commands wired by the Lite manifest. Rust's single-binary dispatch
+The parity surface is the six commands wired by the Lite manifest. Rust's single-binary dispatch
 usage error and `--version` output are packaging controls outside that surface; no valid manifest
 invocation reaches them. Conversely, TypeScript dynamic-import loader failures have no native
 counterpart because those modules are linked into the binary. Their underlying clipboard/store
@@ -43,13 +46,13 @@ failures do have mapped counterparts below.
 
 | Observable decision or effect | TypeScript call path | Rust call path | Mechanical evidence |
 |---|---|---|---|
-| Manifest invocation | `lite/herdr-plugin.toml:17` starts `bun ../src/capture.ts`. | `lite-rs/herdr-plugin.toml:27` starts `herdr-annotate capture`; `rust/src/main.rs:3` passes argv to `cli::run` at `rust/src/cli.rs:24`, then `capture` at `rust/src/cli.rs:55`. | Every `process.capture.*` case. |
-| Context decode | Top-level `src/capture.ts:12` parses `HERDR_PLUGIN_CONTEXT_JSON`; invalid JSON falls back to an empty object. `parseInvocationContext` and `selectedTextFromInvocation` are `src/types.ts:44` and `src/types.ts:58`. | `invocation_context` at `rust/src/cli.rs:48`, then `parse_invocation_context` and `selected_text_from_invocation` at `rust/src/types.rs:85` and `rust/src/types.rs:101`. | `process.capture.context`, `process.capture.invalid-context`. |
-| Required paths | `stateDir`/`pluginRoot` at `src/paths.ts:27` and `src/paths.ts:32`, checked at `src/capture.ts:21`. | `state_dir`/`plugin_root` at `rust/src/paths.rs:29` and `rust/src/paths.rs:36`, checked at `rust/src/cli.rs:59`. | `process.capture.missing-state`, `process.capture.missing-root`. |
-| Selection precedence | Invocation selection at `src/capture.ts:15`; if absent, `takeHandoff` at `src/handoff.ts:24`; if absent/blank/stale, `readClipboard` at `src/clipboard.ts:48`. | The same branches at `rust/src/cli.rs:61`, through `take_default_handoff`/`take_handoff` at `rust/src/handoff.rs:60`/`:32`, then `read_clipboard` at `rust/src/clipboard.rs:93`. | `process.capture.context` seeds all three sources and leaves the skipped handoff untouched; `process.capture.handoff` seeds a competing clipboard; stale, blank, invalid-UTF-8, and clipboard cases exercise the remaining decisions. |
-| Empty selection | `src/capture.ts:38` sends `Nothing to annotate`, creates no pending file, exits 0. | `rust/src/cli.rs:68` sends the same notification and returns success. | `process.capture.empty`. |
-| Pending record | `src/capture.ts:42` creates the state directory; `:44` constructs the record; `:49` names it; `:52` writes it. | `rust/src/cli.rs:75` constructs it; `:82` names it; `write_pending` at `:166` writes it. | All successful capture cases compare literal JSON after generated time/name normalization and assert mode 0600. |
-| Editor pane | `runHerdr` at `src/herdr.ts:11` receives the argv built at `src/capture.ts:54`. Failure removes pending at `:74`, then the catch at `:78` notifies, prints, and exits 1. | `run_herdr` at `rust/src/herdr.rs:22` receives the argv at `rust/src/cli.rs:87`. Failure removes pending at `:107`; `cli::run` notifies at `:26`; `main` prints/exits 1 at `rust/src/main.rs:3`. | `process.capture.context` compares success argv; `process.capture.open-failure` compares cleanup, notification, stderr, and exit. |
+| Manifest invocation | `lite/herdr-plugin.toml:17` starts `bun ../src/capture.ts`. | `lite-rs/herdr-plugin.toml:27` starts `herdr-annotate capture`; `rust/src/main.rs:3` passes argv to `cli::run` at `rust/src/cli.rs:33`, then `capture` at `rust/src/cli.rs:65`. | Every `process.capture.*` case. |
+| Context decode | Top-level `src/capture.ts:12` parses `HERDR_PLUGIN_CONTEXT_JSON`; invalid JSON falls back to an empty object. `parseInvocationContext` and `selectedTextFromInvocation` are `src/types.ts:44` and `src/types.ts:58`. | `invocation_context` at `rust/src/cli.rs:58`, then `parse_invocation_context` and `selected_text_from_invocation` at `rust/src/types.rs:85` and `rust/src/types.rs:101`. | `process.capture.context`, `process.capture.invalid-context`. |
+| Required paths | `stateDir`/`pluginRoot` at `src/paths.ts:27` and `src/paths.ts:32`, checked at `src/capture.ts:21`. | `state_dir`/`plugin_root` at `rust/src/paths.rs:29` and `rust/src/paths.rs:36`, checked at `rust/src/cli.rs:69`. | `process.capture.missing-state`, `process.capture.missing-root`. |
+| Selection precedence | Invocation selection at `src/capture.ts:15`; if absent, `takeHandoff` at `src/handoff.ts:24`; if absent/blank/stale, `readClipboard` at `src/clipboard.ts:48`. | The same branches at `rust/src/cli.rs:71`, through `take_default_handoff`/`take_handoff` at `rust/src/handoff.rs:60`/`:32`, then `read_clipboard` at `rust/src/clipboard.rs:93`. | `process.capture.context` seeds all three sources and leaves the skipped handoff untouched; `process.capture.handoff` seeds a competing clipboard; stale, blank, invalid-UTF-8, and clipboard cases exercise the remaining decisions. |
+| Empty selection | `src/capture.ts:38` sends `Nothing to annotate`, creates no pending file, exits 0. | `rust/src/cli.rs:78` sends the same notification and returns success. | `process.capture.empty`. |
+| Pending record | `src/capture.ts:42` creates the state directory; `:44` constructs the record; `:49` names it; `:52` writes it. | `rust/src/cli.rs:85` constructs it; `:92` names it; `write_pending` at `:247` writes it. | All successful capture cases compare literal JSON after generated time/name normalization and assert mode 0600. |
+| Editor pane | `runHerdr` at `src/herdr.ts:11` receives the argv built at `src/capture.ts:54`. Failure removes pending at `:74`, then the catch at `:78` notifies, prints, and exits 1. | `run_herdr` at `rust/src/herdr.rs:22` receives the argv at `rust/src/cli.rs:97`. Failure removes pending at `:117`; `cli::run` notifies at `:35`; `main` prints/exits 1 at `rust/src/main.rs:3`. | `process.capture.context` compares success argv; `process.capture.open-failure` compares cleanup, notification, stderr, and exit. |
 
 The structural difference is exception flow versus `Result`. Both converge on the same process
 contract: success and blank input exit 0; a defined failure produces one stderr line, one best-effort
@@ -59,24 +62,35 @@ contract: success and blank input exit 0; a defined failure produces one stderr 
 
 | Observable decision or effect | TypeScript call path | Rust call path | Mechanical evidence |
 |---|---|---|---|
-| Manifest and state | `lite/herdr-plugin.toml:24` → top-level `src/export.ts:7`; state is required at `:8`. | `lite-rs/herdr-plugin.toml:34` → `rust/src/main.rs:3` → `cli::run` at `rust/src/cli.rs:24` → `copy_context` at `:114`. | Every `process.copy.*` case. |
-| Load and ordering | `loadAnnotations` at `src/store.ts:37` locks/parses; `newestFirstAnnotations` at `:32` reverses a copy; `src/export.ts:10` propagates load failure. | `load_annotations` at `rust/src/store.rs:70` locks/parses; `newest_first_annotations` at `:65` reverses clones; `rust/src/cli.rs:116` propagates failure. | Empty, populated, invalid-store, busy-lock, and stale-lock cases. |
-| Empty store | `src/export.ts:14` notifies `No annotations` / `There is nothing to copy yet.` and exits 0. | `rust/src/cli.rs:117` sends the same notification and returns success. | `process.copy.empty`, including the newly created state-directory mode. |
+| Manifest and state | `lite/herdr-plugin.toml:24` → top-level `src/export.ts:7`; state is required at `:8`. | `lite-rs/herdr-plugin.toml:34` → `rust/src/main.rs:3` → `cli::run` at `rust/src/cli.rs:33` → `copy_context` at `:124`. | Every `process.copy.*` case. |
+| Load and ordering | `loadAnnotations` at `src/store.ts:37` locks/parses; `newestFirstAnnotations` at `:32` reverses a copy; `src/export.ts:10` propagates load failure. | `load_annotations` at `rust/src/store.rs:70` locks/parses; `newest_first_annotations` at `:65` reverses clones; `rust/src/cli.rs:126` propagates failure. | Empty, populated, invalid-store, busy-lock, and stale-lock cases. |
+| Empty store | `src/export.ts:14` notifies `No annotations` / `There is nothing to copy yet.` and exits 0. | `rust/src/cli.rs:127` sends the same notification and returns success. | `process.copy.empty`, including the newly created state-directory mode. |
 | Markdown and clipboard | `formatAnnotations` at `src/format.ts:44`, then `writeClipboard` at `src/clipboard.ts:63`. | `format_annotations` at `rust/src/format.rs:67`, then `write_clipboard` at `rust/src/clipboard.rs:110`. | `process.copy.single`, `process.copy.populated`, `process.copy.no-clipboard`, and `store.cross-read`; clipboard bytes are unnormalized. |
-| Success/failure reporting | `src/export.ts:21` sends singular/plural `Annotations copied`; catch at `:25` sends `Copy failed`, prints, exits 1. | `rust/src/cli.rs:122` sends the same success notification; `cli::run` at `:29` sends `Copy failed`; `main` prints/exits 1. | Single and populated cases prove grammar; no-clipboard, invalid-store, busy-lock, and missing-state prove failure outputs and exits. |
+| Success/failure reporting | `src/export.ts:21` sends singular/plural `Annotations copied`; catch at `:25` sends `Copy failed`, prints, exits 1. | `rust/src/cli.rs:132` sends the same success notification; `cli::run` at `:38` sends `Copy failed`; `main` prints/exits 1. | Single and populated cases prove grammar; no-clipboard, invalid-store, busy-lock, and missing-state prove failure outputs and exits. |
+
+### `copy-archive`
+
+| Observable decision or effect | TypeScript call path | Rust call path | Mechanical evidence |
+|---|---|---|---|
+| Manifest and state | `lite/herdr-plugin.toml:31` → top-level `src/export-archive.ts:76` → `main` at `:45`; state is required at `:47`. | `lite-rs/herdr-plugin.toml:41` → `rust/src/main.rs:3` → `cli::run` at `rust/src/cli.rs:33` → `copy_archive` at `:183`; state is required at `:184`. | Every `process.copy-archive.*` case. |
+| Shared workflow | `copyAndArchiveAnnotations` at `src/archive-workflow.ts:29` receives the same dependencies `src/manager.ts:226` injects, wired at `src/export-archive.ts:55`. | `copy_and_archive_annotations` at `rust/src/archive_workflow.rs:27` receives the dependencies `rust/src/manager.rs:555` injects, wired at `rust/src/cli.rs:191`. | `test/archive-workflow.test.ts` and `archive_workflow::tests` cover the workflow; `store.manager.copy-archive` covers the manager key; the process cases cover the action. |
+| Operation order | Load, format newest first, clipboard write, `appendArchivedSet`, then `removeAnnotationsById` — `src/archive-workflow.ts:32`-`:52`. | The same order at `rust/src/archive_workflow.rs:38`-`:65`. | `process.copy-archive.populated` byte-compares both JSONL stores, modes, and leftover lock/temp files afterwards, plus the unnormalized clipboard bytes. |
+| Empty store | The injected loader records the empty read at `src/export-archive.ts:58`; `copyArchiveReport` at `:39` notifies `No annotations` / `There is nothing to copy yet.` and exits 0, matching `export.ts`. | `Cell` flag at `rust/src/cli.rs:194`; `copy_archive_report` at `:170` sends the same notification and returns success. | `process.copy-archive.empty` compares the notification, exit 0, and the untouched state tree. |
+| Success reporting | `copyArchiveReport` at `src/export-archive.ts:25` sends singular/plural `Annotations copied and archived`. | `copy_archive_report` at `rust/src/cli.rs:157` builds the same title and body; `copy_archive` notifies at `:207`. | `process.copy-archive.populated`; `test/export-archive.test.ts` and `cli::tests::copy_archive_maps_every_outcome_to_its_notification_and_exit_status` pin both grammars. |
+| Failure reporting | A `stay_open` failure maps to `Copy and archive failed` at `src/export-archive.ts:42`; the retained-active partial maps to `Copy and archive incomplete` at `:32`. Both print the body and exit 1 at `:70`. | The same two arms at `rust/src/cli.rs:175` and `:165`; `copy_archive` returns the body at `:209` and `main` prints/exits 1. | `process.copy-archive.no-clipboard` and `process.copy-archive.missing-state` compare notification argv, stderr, exit code, and the unchanged stores; the retained-active arm is pinned by both unit tests. |
 
 ### `manage`
 
 | Observable decision or effect | TypeScript call path | Rust call path | Mechanical evidence |
 |---|---|---|---|
-| Manifest and root | `lite/herdr-plugin.toml:31` → `src/open-manager.ts:5` → `pluginRoot` at `src/paths.ts:32`. | `lite-rs/herdr-plugin.toml:41` → `rust/src/main.rs:3` → `cli::run` at `rust/src/cli.rs:24` → `manage` at `:133` → `plugin_root` at `rust/src/paths.rs:36`. | `process.manage.success`, `process.manage.missing-root`. |
-| Manager pane | The argv literal is `src/open-manager.ts:13`; `runHerdr` is `src/herdr.ts:11`. Errors notify/print/exit at `src/open-manager.ts:32`. | The argv literal is `rust/src/cli.rs:135`; `run_herdr` is `rust/src/herdr.rs:22`; `cli::run`/`main` handle notify, stderr, and exit. | Success, child-stderr failure, empty-child-stderr fallback, and missing-root cases. |
+| Manifest and root | `lite/herdr-plugin.toml:38` → `src/open-manager.ts:5` → `pluginRoot` at `src/paths.ts:32`. | `lite-rs/herdr-plugin.toml:48` → `rust/src/main.rs:3` → `cli::run` at `rust/src/cli.rs:33` → `manage` at `:214` → `plugin_root` at `rust/src/paths.rs:36`. | `process.manage.success`, `process.manage.missing-root`. |
+| Manager pane | The argv literal is `src/open-manager.ts:13`; `runHerdr` is `src/herdr.ts:11`. Errors notify/print/exit at `src/open-manager.ts:32`. | The argv literal is `rust/src/cli.rs:216`; `run_herdr` is `rust/src/herdr.rs:22`; `cli::run`/`main` handle notify, stderr, and exit. | Success, child-stderr failure, empty-child-stderr fallback, and missing-root cases. |
 
 ### `editor`
 
 | Observable decision or effect | TypeScript call path | Rust call path | Mechanical evidence |
 |---|---|---|---|
-| Manifest and pending selection | `lite/herdr-plugin.toml:39` → top-level `src/editor.ts:17`. `invocationContext` at `:20`; pending-file parse at `:34`; fallback `pendingAnnotationFromInvocation` at `src/types.ts:65`; parsed-file canonicalization at `src/types.ts:79`. | `lite-rs/herdr-plugin.toml:49` → dispatcher → `editor::run` at `rust/src/editor.rs:346`; `pending_from_env` at `:320`; invocation fallback and pending parsing at `rust/src/types.rs:107` and `:119`. | Missing/invalid process cases; `screen.editor.pending-file-save`; the other editor PTY cases use invocation fallback. |
+| Manifest and pending selection | `lite/herdr-plugin.toml:46` → top-level `src/editor.ts:17`. `invocationContext` at `:20`; pending-file parse at `:34`; fallback `pendingAnnotationFromInvocation` at `src/types.ts:65`; parsed-file canonicalization at `src/types.ts:79`. | `lite-rs/herdr-plugin.toml:56` → dispatcher → `editor::run` at `rust/src/editor.rs:346`; `pending_from_env` at `:320`; invocation fallback and pending parsing at `rust/src/types.rs:107` and `:119`. | Missing/invalid process cases; `screen.editor.pending-file-save`; the other editor PTY cases use invocation fallback. |
 | Terminal and screen | `render` at `src/editor.ts:77` uses `sanitizeTerminalText`, `wrapText`, `layoutComment`, and width helpers; alternate-screen setup is `:207`. | `EditorApp::draw` at `rust/src/editor.rs:67` calls the corresponding helpers at `rust/src/format.rs:7`/`:26`, `rust/src/layout.rs:14`, and `rust/src/width.rs:35`; `editor::run` owns the Ratatui terminal. | Initial frame and every frame in `screen.editor.*`; fixed 86×22 cells include wide Hangul. |
 | Input and save | Key dispatch is `src/editor.ts:172`; vertical movement is `:52`; `save` is `:122`; successful save renders, waits 250 ms, and exits. | `EditorApp::handle_key` at `rust/src/editor.rs:168`; vertical movement at `:227`; `save` at `:253`; `run` at `:346` renders the saved state, waits 250 ms, and exits. | `screen.editor.edit-save`, empty-save, missing-state, Esc, and Ctrl+C cases. Store bytes are compared after save. |
 | Cleanup and signals | `cleanup`/`exit` at `src/editor.ts:110`/`:117`; SIGTERM/SIGHUP handlers at `:160`. | `Termination::install`/`requested` at `rust/src/termination.rs:17`/`:33`; the polling loop at `rust/src/editor.rs:346` reaches `ratatui::restore`. | `screen.editor.sigterm` compares exit 0 and the restored terminal grid. |
@@ -85,7 +99,7 @@ contract: success and blank input exit 0; a defined failure produces one stderr 
 
 | Observable decision or effect | TypeScript call path | Rust call path | Mechanical evidence |
 |---|---|---|---|
-| Manifest, state, initial load | `lite/herdr-plugin.toml:47` → `requireStateDir` at `src/manager.ts:29`; `reloadActive`/`reloadArchives` at `:53`/`:64`. | `lite-rs/herdr-plugin.toml:57` → dispatcher → `manager::run` at `rust/src/manager.rs:718`; `ManagerApp::load` at `:62`; reload methods at `:79`/`:94`. | `process.manager.missing-state`; initial screens in all manager PTY cases. |
+| Manifest, state, initial load | `lite/herdr-plugin.toml:54` → `requireStateDir` at `src/manager.ts:29`; `reloadActive`/`reloadArchives` at `:53`/`:64`. | `lite-rs/herdr-plugin.toml:64` → dispatcher → `manager::run` at `rust/src/manager.rs:718`; `ManagerApp::load` at `:62`; reload methods at `:79`/`:94`. | `process.manager.missing-state`; initial screens in all manager PTY cases. |
 | Active screen | `render` at `src/manager.ts:196` → `renderActive` at `:93`, with `clipped` at `:75`, formatting helpers, newest-first state, source and timestamp metadata. | `ManagerApp::draw` at `rust/src/manager.rs:109` → `draw_active` at `:161`, with `clipped` at `:680` and `format_timestamp` at `:690`. | Every active-view snapshot, including the detail-width regression fixture in `screen.manager.all-views`. |
 | Archive screen | `render` → `renderArchives` at `src/manager.ts:136`; archive annotations are previewed newest first. | `ManagerApp::draw` → `draw_archives` at `rust/src/manager.rs:299`; same preview ordering and clipping. | Every archive-view snapshot and scripted archive mutation. |
 | Input and mutations | Top-level key dispatch is `src/manager.ts:402`; active/archive handlers are `:318`/`:344`; action functions are `:216`–`:316`. | `ManagerApp::handle_key` is `rust/src/manager.rs:433`; view handlers are `:465`/`:502`; action methods are `:546`–`:650`. | `screen.manager.all-views`, empty-actions, success-copy sessions, and the exit/signal sessions. Resulting JSONL and clipboard bytes are compared. |
@@ -146,8 +160,8 @@ also fed by `screen.manager.all-views`.
 
 | Observable | TypeScript call path | Rust call path | Exact product and evidence |
 |---|---|---|---|
-| State directory creation | `fs.mkdirSync(..., {recursive:true})` at `src/capture.ts:42` and `withStoreLock` at `src/store.ts:196`. | `create_dir_all` at `rust/src/cli.rs:74` and `create_private_dir_all` at `rust/src/store.rs:392`. | Process-default directory mode (0755 under harness umask 022), not forced 0700. `process.copy.empty` compares the directory mode. |
-| Pending file | `src/capture.ts:44`/`:49`/`:52`. | `rust/src/cli.rs:75`/`:82` and `write_pending` at `:166`. | Name `pending-<epoch-ms>-<pid>.json`; mode 0600 on creation; bytes are one JSON object plus `\n`; property order `selectedText`, `context`, `capturedAt`. Capture cases byte/mode-diff it. |
+| State directory creation | `fs.mkdirSync(..., {recursive:true})` at `src/capture.ts:42` and `withStoreLock` at `src/store.ts:196`. | `create_dir_all` at `rust/src/cli.rs:84` and `create_private_dir_all` at `rust/src/store.rs:392`. | Process-default directory mode (0755 under harness umask 022), not forced 0700. `process.copy.empty` compares the directory mode. |
+| Pending file | `src/capture.ts:44`/`:49`/`:52`. | `rust/src/cli.rs:85`/`:92` and `write_pending` at `:247`. | Name `pending-<epoch-ms>-<pid>.json`; mode 0600 on creation; bytes are one JSON object plus `\n`; property order `selectedText`, `context`, `capturedAt`. Capture cases byte/mode-diff it. |
 | Pending consumption | `src/editor.ts:34` reads/parses, then `fs.rmSync(...,{force:true})` at `:39`. | `pending_from_env` at `rust/src/editor.rs:320`, then `remove_pending_file` at `:337`. | Delete only after successful read and semantic parse; missing-at-delete is ignored; other deletion errors fail startup. `screen.editor.pending-file-save` compares the consumed tree and saved JSONL; Rust regression `pending_removal_is_forceful_like_typescript` pins the delete race. |
 | Handoff take | `handoffPath`/`takeHandoff` at `src/handoff.ts:17`/`:24`. | `handoff_path`/`take_handoff` at `rust/src/handoff.rs:12`/`:32`. | `$XDG_RUNTIME_DIR` else temp + `herdr-annotate-<uid>/selection`; missing/stat failure means absent; regular files ≤15 s old are decoded as UTF-8 with replacement; stale and blank values are rejected; every found node is removed; non-NotFound removal failure propagates. Context-skipped handoff remains. Capture handoff cases diff pending bytes and the runtime tree. |
 | Active append | `appendAnnotation` at `src/store.ts:42`. | `append_annotation` / `append_annotation_context_first` at `rust/src/store.rs:77`/`:82`, sharing `append_annotation_record` at `:97`. | Append one compact JSON object plus `\n`; mode 0600 on creation. Capture-file editor order is `selectedText,capturedAt,context,id,comment,createdAt`; direct invocation fallback preserves TypeScript's distinct `selectedText,context,capturedAt,id,comment,createdAt`. `screen.editor.pending-file-save.state` and `screen.editor.edit-save.state` byte-diff both orders; two Rust regressions pin them. |
@@ -168,8 +182,8 @@ herdr plugin pane open --cwd <HERDR_PLUGIN_ROOT> --plugin annotate --entrypoint 
   --env HERDR_ANNOTATE_PENDING=<normalized-pending-path> --focus
 ```
 
-It is constructed at `src/capture.ts:54` and `rust/src/cli.rs:87` and compared by every successful
-capture case. The manager argv is constructed at `src/open-manager.ts:13` and `rust/src/cli.rs:135`:
+It is constructed at `src/capture.ts:54` and `rust/src/cli.rs:97` and compared by every successful
+capture case. The manager argv is constructed at `src/open-manager.ts:13` and `rust/src/cli.rs:216`:
 
 ```text
 herdr plugin pane open --cwd <HERDR_PLUGIN_ROOT> --plugin annotate --entrypoint manager \
@@ -188,7 +202,8 @@ herdr notification show <title> [--body <body>]
 ```
 
 The compared title/body pairs are `Nothing to annotate`, `Annotate failed`, `No annotations`,
-`Annotations copied`, `Copy failed`, and `Unable to open annotations`; their bodies are listed in the
+`Annotations copied`, `Copy failed`, `Annotations copied and archived`, `Copy and archive failed`,
+`Copy and archive incomplete`, and `Unable to open annotations`; their bodies are listed in the
 error/reporting table below or generated from the exact annotation count.
 
 Clipboard candidates and arguments are defined at `src/clipboard.ts:13`/`:30` and
@@ -209,7 +224,7 @@ branches. Windows arguments are source-mapped and build-checked, not run by this
 
 | Path | Exit |
 |---|---|
-| Successful capture, empty capture after notification, successful/empty copy, successful manage pane open | 0 |
+| Successful capture, empty capture after notification, successful/empty copy, successful/empty copy-archive, successful manage pane open | 0 |
 | Missing required env, no clipboard adapter, store parse/lock/access failure, or pane-open failure | 1 after one stderr line; action commands also attempt their failure notification |
 | Editor/manager initialization error | 1 with stderr, no action-level notification |
 | Editor Esc/Ctrl+C, manager Esc/q/Ctrl+C, editor SIGTERM, manager SIGHUP | 0 after terminal restoration |
@@ -224,8 +239,8 @@ the prefix exactly as shown.
 
 | Exact string or template | TypeScript emitter | Rust emitter | Proof |
 |---|---|---|---|
-| `HERDR_PLUGIN_STATE_DIR is not set` | `src/capture.ts:22`, `src/export.ts:9`, `src/manager.ts:32` | `rust/src/cli.rs:59`/`:115`, `rust/src/manager.rs:719` | Missing-state process cases. |
-| `HERDR_PLUGIN_ROOT is not set` | `src/capture.ts:24`, `src/open-manager.ts:7` | `rust/src/cli.rs:60`/`:134` | Missing-root cases. |
+| `HERDR_PLUGIN_STATE_DIR is not set` | `src/capture.ts:22`, `src/export.ts:9`, `src/export-archive.ts:48`, `src/manager.ts:32` | `rust/src/cli.rs:69`/`:125`/`:185`, `rust/src/manager.rs:719` | Missing-state process cases. |
+| `HERDR_PLUGIN_ROOT is not set` | `src/capture.ts:24`, `src/open-manager.ts:7` | `rust/src/cli.rs:70`/`:215` | Missing-root cases. |
 | `No supported clipboard reader is available` | `src/clipboard.ts:59` | `rust/src/clipboard.rs:106` | `process.capture.no-clipboard`. |
 | `Missing pending annotation` | `src/editor.ts:32` | `rust/src/editor.rs:326` | `process.editor.missing-pending`. |
 | `Pending annotation is invalid` | `src/editor.ts:37` | `rust/src/editor.rs:332` | `process.editor.invalid-pending`. |
@@ -241,7 +256,7 @@ the prefix exactly as shown.
 | `Nothing to copy.` | `src/manager-copy.ts:18` | `rust/src/manager_copy.rs:20` | `screen.manager.empty-actions`. |
 | `Nothing to copy and archive.` | `src/archive-workflow.ts:35` | `rust/src/archive_workflow.rs:44` | `screen.manager.empty-actions`. |
 | `No archive selected.` | `src/manager.ts:272`/`:349` | `rust/src/manager.rs:504`/`:608` | `screen.manager.empty-actions`. |
-| `Copied and archived, but active annotations remain: <store error>` | `src/manager.ts:237` | `rust/src/manager.rs:569` | Paired workflow partial-failure tests plus static catalog. |
+| `Copied and archived, but active annotations remain: <store error>` | `src/manager.ts:237`, `src/export-archive.ts:35` | `rust/src/manager.rs:569`, `rust/src/cli.rs:167` | Paired workflow partial-failure tests plus static catalog. |
 | `Annotations restored, but the archive remains: <store error>` | `src/manager.ts:287` | `rust/src/manager.rs:627` | Paired workflow partial-failure tests plus static catalog. |
 | Child `herdr` stderr, or `herdr <argv> failed` | `src/herdr.ts:20` | `rust/src/herdr.rs:32`–`:39` | Manage child-stderr and empty-stderr cases; capture pane failure. |
 
@@ -265,6 +280,11 @@ Notable differential groups:
 - `process.capture.*`: context > handoff > clipboard precedence; stale/blank/lossy-UTF-8 handoff;
   invalid context; empty; missing adapter/env; pane success/failure and pending cleanup.
 - `process.copy.*`: missing/empty/single/plural/invalid stores; writer failure; fresh/stale locks.
+- `process.copy-archive.*`: missing/empty stores; a complete archive byte-compared afterwards; writer
+  failure leaving both stores untouched.
+- `manifest.*`: both Lite manifests declare the same action and pane ids, titles, descriptions,
+  contexts, placements, geometry, platform gates, and per-runtime argv, and the harness drives every
+  declared entrypoint.
 - `process.manage.*`, `process.editor.*`, `process.manager.*`: argv/error fallback and initialization.
 - `screen.editor.*`: both pending sources, every requested edit key, save branches, cancel keys, and SIGTERM.
 - `screen.manager.*`: both views, every view-valid key, ignored cross-view keys by handler mapping,

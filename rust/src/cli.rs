@@ -1,5 +1,6 @@
-//! One native command boundary for the five Herdr entrypoints.
+//! One native command boundary for the six Herdr entrypoints.
 
+use std::cell::Cell;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
@@ -7,18 +8,26 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::{SecondsFormat, Utc};
 use serde_json::Value;
+use uuid::Uuid;
 
+use crate::archive_workflow::{
+    CopyAndArchiveDependencies, CopyAndArchiveOutcome, copy_and_archive_annotations,
+};
 use crate::clipboard::{read_clipboard, write_clipboard};
 use crate::format::format_annotations;
 use crate::handoff::take_default_handoff;
 use crate::herdr::{notify, run_herdr};
 use crate::paths::{normalize_windows_path, plugin_root, state_dir};
-use crate::store::{load_annotations, newest_first_annotations};
+use crate::store::{
+    append_archived_set, load_annotations, newest_first_annotations, remove_annotations_by_id,
+};
 use crate::types::{
-    PendingAnnotation, javascript_trim, parse_invocation_context, selected_text_from_invocation,
+    ArchivedAnnotationSet, PendingAnnotation, javascript_trim, parse_invocation_context,
+    selected_text_from_invocation,
 };
 
-const USAGE: &str = "Usage: herdr-annotate <capture|copy-context|editor|manage|manager>";
+const USAGE: &str =
+    "Usage: herdr-annotate <capture|copy-context|copy-archive|editor|manage|manager>";
 
 /// Dispatch one native binary subcommand.
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -29,6 +38,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some("copy-context") if args.len() == 1 => copy_context().inspect_err(|message| {
             notify("Copy failed", Some(message));
         }),
+        Some("copy-archive") if args.len() == 1 => copy_archive(),
         Some("manage") if args.len() == 1 => manage().inspect_err(|message| {
             notify("Unable to open annotations", Some(message));
         }),
@@ -130,6 +140,77 @@ fn copy_context() -> Result<(), String> {
     Ok(())
 }
 
+/// The notification and exit status one copy-and-archive action reports.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CopyArchiveReport {
+    title: String,
+    body: String,
+    failure: bool,
+}
+
+/// Map one copy-and-archive outcome to the action's notification and exit status.
+///
+/// `loaded_empty` separates the nothing-to-do case from a real failure: both are `StayOpen`,
+/// but an empty store is reported like `copy-context` and returns success.
+fn copy_archive_report(outcome: CopyAndArchiveOutcome, loaded_empty: bool) -> CopyArchiveReport {
+    match outcome {
+        CopyAndArchiveOutcome::Close { archived_count } => CopyArchiveReport {
+            title: "Annotations copied and archived".to_owned(),
+            body: format!(
+                "{archived_count} annotation{} copied as Markdown and archived.",
+                if archived_count == 1 { "" } else { "s" }
+            ),
+            failure: false,
+        },
+        CopyAndArchiveOutcome::ArchivedActiveRetained { message } => CopyArchiveReport {
+            title: "Copy and archive incomplete".to_owned(),
+            body: format!("Copied and archived, but active annotations remain: {message}"),
+            failure: true,
+        },
+        CopyAndArchiveOutcome::StayOpen { .. } if loaded_empty => CopyArchiveReport {
+            title: "No annotations".to_owned(),
+            body: "There is nothing to copy yet.".to_owned(),
+            failure: false,
+        },
+        CopyAndArchiveOutcome::StayOpen { message } => CopyArchiveReport {
+            title: "Copy and archive failed".to_owned(),
+            body: message,
+            failure: true,
+        },
+    }
+}
+
+fn copy_archive() -> Result<(), String> {
+    let Some(dir) = state_dir() else {
+        let message = "HERDR_PLUGIN_STATE_DIR is not set".to_owned();
+        notify("Copy and archive failed", Some(&message));
+        return Err(message);
+    };
+
+    let loaded_empty = Cell::new(false);
+    let outcome = copy_and_archive_annotations(CopyAndArchiveDependencies {
+        load_active: || {
+            let loaded = load_annotations(&dir);
+            if matches!(&loaded, Ok(active) if active.is_empty()) {
+                loaded_empty.set(true);
+            }
+            loaded
+        },
+        write_clipboard: |text: String| write_clipboard(&text),
+        save_archive: |archive: ArchivedAnnotationSet| append_archived_set(&dir, &archive),
+        remove_active: |ids: Vec<String>| remove_annotations_by_id(&dir, &ids),
+        create_archive_id: || Uuid::new_v4().to_string(),
+        now: now_iso,
+    });
+
+    let report = copy_archive_report(outcome, loaded_empty.get());
+    notify(&report.title, Some(&report.body));
+    if report.failure {
+        return Err(report.body);
+    }
+    Ok(())
+}
+
 fn manage() -> Result<(), String> {
     let root = plugin_root().ok_or_else(|| "HERDR_PLUGIN_ROOT is not set".to_owned())?;
     run_herdr(&[
@@ -187,6 +268,70 @@ mod tests {
         assert_eq!(
             run(&["capture".to_owned(), "extra".to_owned()]),
             Err(USAGE.to_owned())
+        );
+        assert_eq!(
+            run(&["copy-archive".to_owned(), "extra".to_owned()]),
+            Err(USAGE.to_owned())
+        );
+    }
+
+    #[test]
+    fn copy_archive_maps_every_outcome_to_its_notification_and_exit_status() {
+        assert_eq!(
+            copy_archive_report(CopyAndArchiveOutcome::Close { archived_count: 1 }, false),
+            CopyArchiveReport {
+                title: "Annotations copied and archived".to_owned(),
+                body: "1 annotation copied as Markdown and archived.".to_owned(),
+                failure: false,
+            }
+        );
+        assert_eq!(
+            copy_archive_report(CopyAndArchiveOutcome::Close { archived_count: 3 }, false),
+            CopyArchiveReport {
+                title: "Annotations copied and archived".to_owned(),
+                body: "3 annotations copied as Markdown and archived.".to_owned(),
+                failure: false,
+            }
+        );
+        assert_eq!(
+            copy_archive_report(
+                CopyAndArchiveOutcome::StayOpen {
+                    message: "Nothing to copy and archive.".to_owned(),
+                },
+                true,
+            ),
+            CopyArchiveReport {
+                title: "No annotations".to_owned(),
+                body: "There is nothing to copy yet.".to_owned(),
+                failure: false,
+            }
+        );
+        assert_eq!(
+            copy_archive_report(
+                CopyAndArchiveOutcome::StayOpen {
+                    message: "clipboard write failed".to_owned(),
+                },
+                false,
+            ),
+            CopyArchiveReport {
+                title: "Copy and archive failed".to_owned(),
+                body: "clipboard write failed".to_owned(),
+                failure: true,
+            }
+        );
+        assert_eq!(
+            copy_archive_report(
+                CopyAndArchiveOutcome::ArchivedActiveRetained {
+                    message: "store is busy".to_owned(),
+                },
+                false,
+            ),
+            CopyArchiveReport {
+                title: "Copy and archive incomplete".to_owned(),
+                body: "Copied and archived, but active annotations remain: store is busy"
+                    .to_owned(),
+                failure: true,
+            }
         );
     }
 }

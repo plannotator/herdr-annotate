@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import termios
+import tomllib
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,6 +42,15 @@ ISO_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z")
 UUID_PATTERN = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
 )
+TYPESCRIPT_SCRIPTS = {
+    "capture": "capture.ts",
+    "copy-context": "export.ts",
+    "copy-archive": "export-archive.ts",
+    "manage": "open-manager.ts",
+    "editor": "editor.ts",
+    "manager": "manager.ts",
+}
+NATIVE_PROGRAM = "./bin/herdr-annotate.exe"
 PENDING_PATTERN = re.compile(r"pending-\d+-\d+\.json")
 TEMP_PATTERN = re.compile(r"\.(annotations|archives)-\d+-\d+\.tmp")
 DELIBERATE_DIVERGENCES = ("manager timestamp locale outside en-US",)
@@ -542,14 +552,7 @@ class Harness:
     def command(self, implementation: str, entrypoint: str) -> list[str]:
         if implementation == "rust":
             return [str(self.rust_binary), entrypoint]
-        scripts = {
-            "capture": "capture.ts",
-            "copy-context": "export.ts",
-            "manage": "open-manager.ts",
-            "editor": "editor.ts",
-            "manager": "manager.ts",
-        }
-        return ["bun", str(self.root / "src" / scripts[entrypoint])]
+        return ["bun", str(self.root / "src" / TYPESCRIPT_SCRIPTS[entrypoint])]
 
     def environment(
         self,
@@ -731,6 +734,16 @@ def pending_and_runtime_artifact(
 def clipboard_artifact(_implementation: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> object:
     del state, runtime, log, source
     return sink.read_bytes() if sink.exists() else b""
+
+
+def clipboard_and_state_artifact(
+    _implementation: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+) -> object:
+    del runtime, log, source
+    return {
+        "clipboard": (sink.read_bytes() if sink.exists() else b"").decode("utf-8", "replace"),
+        "state": state_snapshot(state, [state]).decode("utf-8", "replace"),
+    }
 
 
 def no_pending_artifact(_implementation: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> object:
@@ -964,6 +977,49 @@ def run_process_layer(harness: Harness) -> None:
         stale_lock,
         lambda impl, state, runtime, log, source, sink: state_snapshot(state, [state]),
     )
+
+    def copy_archive_empty(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+        del state, runtime, log, source, sink
+
+    harness.process_pair(
+        "process.copy-archive.empty",
+        "copy-archive",
+        copy_archive_empty,
+        clipboard_and_state_artifact,
+    )
+
+    def copy_archive_populated(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+        del runtime, log, source, sink
+        seed_stores(state)
+
+    harness.process_pair(
+        "process.copy-archive.populated",
+        "copy-archive",
+        copy_archive_populated,
+        clipboard_and_state_artifact,
+    )
+
+    def copy_archive_no_clipboard(
+        _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+    ) -> Mapping[str, str]:
+        del runtime, log, source, sink
+        seed_stores(state)
+        return {"PARITY_CLIPBOARD_FAIL": "write"}
+
+    harness.process_pair(
+        "process.copy-archive.no-clipboard",
+        "copy-archive",
+        copy_archive_no_clipboard,
+        clipboard_and_state_artifact,
+    )
+
+    def copy_archive_missing_state(
+        _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+    ) -> Mapping[str, str]:
+        del state, runtime, log, source, sink
+        return {"HERDR_PLUGIN_STATE_DIR": ""}
+
+    harness.process_pair("process.copy-archive.missing-state", "copy-archive", copy_archive_missing_state)
 
     def manage_success(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del state, runtime, log, source, sink
@@ -1376,6 +1432,10 @@ def verify_error_catalog(root: Path, proof: Proof) -> None:
             "src/manager.ts",
             "rust/src/manager.rs",
         ),
+        "Annotations copied and archived": ("src/export-archive.ts", "rust/src/cli.rs"),
+        "Copy and archive failed": ("src/export-archive.ts", "rust/src/cli.rs"),
+        "Copy and archive incomplete": ("src/export-archive.ts", "rust/src/cli.rs"),
+        "copied as Markdown and archived.": ("src/export-archive.ts", "rust/src/cli.rs"),
         "Annotations restored, but the archive remains:": (
             "src/manager.ts",
             "rust/src/manager.rs",
@@ -1391,6 +1451,72 @@ def verify_error_catalog(root: Path, proof: Proof) -> None:
             (True, True),
             present,
         )
+
+
+def manifest_entries(manifest: Mapping[str, object], table: str) -> dict[str, dict[str, object]]:
+    entries = manifest.get(table, [])
+    if not isinstance(entries, list):
+        return {}
+    return {
+        str(item.get("id")): item
+        for item in entries
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
+
+
+def verify_manifests(root: Path, proof: Proof) -> None:
+    """Both Lite manifests must declare the same entrypoints, and the harness must drive them all."""
+
+    def load(path: Path) -> dict[str, object]:
+        with path.open("rb") as handle:
+            return tomllib.load(handle)
+
+    lite = load(root / "lite" / "herdr-plugin.toml")
+    native = load(root / "lite-rs" / "herdr-plugin.toml")
+    full = load(root / "herdr-plugin.toml")
+
+    lite_actions = manifest_entries(lite, "actions")
+    native_actions = manifest_entries(native, "actions")
+    lite_panes = manifest_entries(lite, "panes")
+    native_panes = manifest_entries(native, "panes")
+    full_actions = manifest_entries(full, "actions")
+    full_panes = manifest_entries(full, "panes")
+
+    proof.compare("manifest.action-ids", sorted(lite_actions), sorted(native_actions))
+    proof.compare("manifest.pane-ids", sorted(lite_panes), sorted(native_panes))
+    proof.compare(
+        "manifest.harness-entrypoints",
+        sorted(TYPESCRIPT_SCRIPTS),
+        sorted(set(lite_actions) | set(lite_panes)),
+    )
+
+    for table, lite_entries, native_entries, full_entries, fields in (
+        ("action", lite_actions, native_actions, full_actions, ("title", "description", "contexts")),
+        ("pane", lite_panes, native_panes, full_panes, ("title", "placement", "width", "height")),
+    ):
+        for identifier, entry in lite_entries.items():
+            native_entry = native_entries.get(identifier, {})
+            full_entry = full_entries.get(identifier, {})
+            for field in fields:
+                proof.compare(
+                    f"manifest.{table}.{identifier}.{field}",
+                    (entry.get(field), entry.get(field)),
+                    (native_entry.get(field), full_entry.get(field)),
+                )
+            lite_command = entry.get("command", [])
+            proof.compare(
+                f"manifest.{table}.{identifier}.command",
+                (
+                    [NATIVE_PROGRAM, identifier],
+                    [part.replace("../src/", "src/") for part in lite_command],
+                ),
+                (native_entry.get("command"), full_entry.get("command")),
+            )
+            proof.compare(
+                f"manifest.{table}.{identifier}.platforms",
+                (None, None, None),
+                (entry.get("platforms"), native_entry.get("platforms"), full_entry.get("platforms")),
+            )
 
 
 def parse_args() -> argparse.Namespace:
@@ -1411,9 +1537,10 @@ def main() -> int:
         run_process_layer(harness)
         print("== screen and store layers")
         typescript_state, rust_state = run_screen_and_store_layer(harness)
-        print("== cross-read and error catalog")
+        print("== cross-read, error catalog, and manifests")
         cross_read(harness, typescript_state, rust_state)
         verify_error_catalog(args.root.resolve(), proof)
+        verify_manifests(args.root.resolve(), proof)
         if proof.failures:
             print(
                 f"Parity Lite: {proof.observables} observables compared, {proof.screens} screens diffed, "

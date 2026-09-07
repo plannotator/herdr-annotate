@@ -5,6 +5,9 @@ on:
     paths:
       - "rust/**"
       - "lite-rs/**"
+      - "src/**"
+      - "lite/**"
+      - "herdr-plugin.toml"
       - "docs/rust-lite-parity-proof.md"
       - "scripts/parity-lite.py"
       - "scripts/parity-lite.sh"
