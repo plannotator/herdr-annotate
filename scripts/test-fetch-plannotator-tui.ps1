@@ -74,7 +74,7 @@ try {
     $result = Invoke-Fetcher
     Assert-True ($result.ExitCode -eq 0) "local override failed: $($result.Output)"
     Assert-BytesEqual $source $destination "local override bytes differ"
-    Assert-True ((Get-Content -LiteralPath $stamp -Raw) -ceq "0.6.0") "local stamp differs"
+    Assert-True ((Get-Content -LiteralPath $stamp -Raw) -ceq "0.7.0") "local stamp differs"
 
     $env:PLANNOTATOR_TUI_BIN = $null
     $env:PLANNOTATOR_TUI_RELEASE_BASE = "http://127.0.0.1:1/must-not-be-requested"
@@ -120,7 +120,7 @@ try {
       Assert-True ($result.ExitCode -eq 0) "download fixture failed: $($result.Output)"
       Assert-True ($result.Output -match "x86_64-pc-windows-msvc") "x64 target was not selected"
       Assert-BytesEqual $source $destination "downloaded destination bytes differ"
-      Assert-True ((Get-Content -LiteralPath $stamp -Raw) -ceq "0.6.0") "download stamp differs"
+      Assert-True ((Get-Content -LiteralPath $stamp -Raw) -ceq "0.7.0") "download stamp differs"
 
       Set-Content -LiteralPath $stamp -NoNewline -Value "preserve-this-stamp"
       $beforeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $destination).Hash
