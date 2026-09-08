@@ -9,6 +9,7 @@ pub mod herdr;
 pub mod layout;
 pub mod manager;
 pub mod manager_copy;
+pub mod pane_clipboard;
 pub mod paths;
 pub mod store;
 pub mod types;

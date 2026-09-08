@@ -5,7 +5,7 @@ TypeScript Lite surface to the Rust call path at function granularity and names 
 case that compares the result. The current local result is:
 
 ```text
-Parity Lite: 459 observables compared, 92 screens diffed, zero divergences / 1 deliberate
+Parity Lite: 496 observables compared, 95 screens diffed, zero divergences / 1 deliberate
 ```
 
 Run it from the repository root with `bash scripts/parity-lite.sh`. The shell wrapper stages a fresh
@@ -21,14 +21,18 @@ diffs and prints their path. A green run removes its temporary workspace.
   manifest and compare the declared entrypoints field by field, so a new action cannot reach one
   runtime only.
 - Screen cases use real PTYs at 86×22 (editor) and 98×28 (manager). The ANSI parser at
-  `scripts/parity-lite.py:156` ignores style escapes but retains the terminal cell grid, including
+  `scripts/parity-lite.py:158` ignores style escapes but retains the terminal cell grid, including
   wide-character continuation cells. It snapshots the initial frame and the frame after every input.
+- Screen cases also retain the raw PTY byte stream and compare every OSC 52 clipboard sequence a
+  pane emitted, in order (`scripts/parity-lite.py:388`). Where a case compares clipboard bytes, the
+  payload of the last sequence is additionally required to equal the bytes the native writer received,
+  so a runtime cannot emit a different copy to the terminal than it wrote to the clipboard.
 - Store cases byte-compare JSONL, modes, and leftover lock/temp files after scripted editor and
   manager mutations. `store.cross-read` makes Bun export the Rust editor's store and Rust export the
   Bun editor's store, then compares the Markdown and subprocess traces.
 - The only normalized values are each case's deliberately different temporary root, generated UUIDs,
   generated ISO timestamps, and pid/time components in pending and temporary filenames
-  (`scripts/parity-lite.py:459`). Seed timestamps are allow-listed and remain literal. Product files
+  (`scripts/parity-lite.py:481`). Seed timestamps are allow-listed and remain literal. Product files
   are never rewritten or filtered. Screen cells and clipboard bytes are never normalized.
 - The harness runs on the host's real adapter branch. macOS therefore proves `pbpaste`/`pbcopy` and
   Ubuntu proves the Wayland → xclip → xsel chain. Windows is intentionally outside this PTY harness
@@ -73,7 +77,7 @@ contract: success and blank input exit 0; a defined failure produces one stderr 
 | Observable decision or effect | TypeScript call path | Rust call path | Mechanical evidence |
 |---|---|---|---|
 | Manifest and state | `lite/herdr-plugin.toml:31` → top-level `src/export-archive.ts:76` → `main` at `:45`; state is required at `:47`. | `lite-rs/herdr-plugin.toml:41` → `rust/src/main.rs:3` → `cli::run` at `rust/src/cli.rs:33` → `copy_archive` at `:183`; state is required at `:184`. | Every `process.copy-archive.*` case. |
-| Shared workflow | `copyAndArchiveAnnotations` at `src/archive-workflow.ts:29` receives the same dependencies `src/manager.ts:226` injects, wired at `src/export-archive.ts:55`. | `copy_and_archive_annotations` at `rust/src/archive_workflow.rs:27` receives the dependencies `rust/src/manager.rs:555` injects, wired at `rust/src/cli.rs:191`. | `test/archive-workflow.test.ts` and `archive_workflow::tests` cover the workflow; `store.manager.copy-archive` covers the manager key; the process cases cover the action. |
+| Shared workflow | `copyAndArchiveAnnotations` at `src/archive-workflow.ts:29` receives the same dependencies `src/manager.ts:228` injects, wired at `src/export-archive.ts:55`. | `copy_and_archive_annotations` at `rust/src/archive_workflow.rs:27` receives the dependencies `rust/src/manager.rs:556` injects, wired at `rust/src/cli.rs:191`. | `test/archive-workflow.test.ts` and `archive_workflow::tests` cover the workflow; `store.manager.copy-archive` covers the manager key; the process cases cover the action. |
 | Operation order | Load, format newest first, clipboard write, `appendArchivedSet`, then `removeAnnotationsById` — `src/archive-workflow.ts:32`-`:52`. | The same order at `rust/src/archive_workflow.rs:38`-`:65`. | `process.copy-archive.populated` byte-compares both JSONL stores, modes, and leftover lock/temp files afterwards, plus the unnormalized clipboard bytes. |
 | Empty store | The injected loader records the empty read at `src/export-archive.ts:58`; `copyArchiveReport` at `:39` notifies `No annotations` / `There is nothing to copy yet.` and exits 0, matching `export.ts`. | `Cell` flag at `rust/src/cli.rs:194`; `copy_archive_report` at `:170` sends the same notification and returns success. | `process.copy-archive.empty` compares the notification, exit 0, and the untouched state tree. |
 | Success reporting | `copyArchiveReport` at `src/export-archive.ts:25` sends singular/plural `Annotations copied and archived`. | `copy_archive_report` at `rust/src/cli.rs:157` builds the same title and body; `copy_archive` notifies at `:207`. | `process.copy-archive.populated`; `test/export-archive.test.ts` and `cli::tests::copy_archive_maps_every_outcome_to_its_notification_and_exit_status` pin both grammars. |
@@ -99,11 +103,11 @@ contract: success and blank input exit 0; a defined failure produces one stderr 
 
 | Observable decision or effect | TypeScript call path | Rust call path | Mechanical evidence |
 |---|---|---|---|
-| Manifest, state, initial load | `lite/herdr-plugin.toml:54` → `requireStateDir` at `src/manager.ts:29`; `reloadActive`/`reloadArchives` at `:53`/`:64`. | `lite-rs/herdr-plugin.toml:64` → dispatcher → `manager::run` at `rust/src/manager.rs:718`; `ManagerApp::load` at `:62`; reload methods at `:79`/`:94`. | `process.manager.missing-state`; initial screens in all manager PTY cases. |
-| Active screen | `render` at `src/manager.ts:196` → `renderActive` at `:93`, with `clipped` at `:75`, formatting helpers, newest-first state, source and timestamp metadata. | `ManagerApp::draw` at `rust/src/manager.rs:109` → `draw_active` at `:161`, with `clipped` at `:680` and `format_timestamp` at `:690`. | Every active-view snapshot, including the detail-width regression fixture in `screen.manager.all-views`. |
-| Archive screen | `render` → `renderArchives` at `src/manager.ts:136`; archive annotations are previewed newest first. | `ManagerApp::draw` → `draw_archives` at `rust/src/manager.rs:299`; same preview ordering and clipping. | Every archive-view snapshot and scripted archive mutation. |
-| Input and mutations | Top-level key dispatch is `src/manager.ts:402`; active/archive handlers are `:318`/`:344`; action functions are `:216`–`:316`. | `ManagerApp::handle_key` is `rust/src/manager.rs:433`; view handlers are `:465`/`:502`; action methods are `:546`–`:650`. | `screen.manager.all-views`, empty-actions, success-copy sessions, and the exit/signal sessions. Resulting JSONL and clipboard bytes are compared. |
-| Cleanup and signals | `cleanup`/`exit` at `src/manager.ts:376`/`:383`; signal handlers at `:390`. | `Termination` at `rust/src/termination.rs:17`; polling/restore at `rust/src/manager.rs:718`. | `screen.manager.sighup` compares exit 0 and restored cells. |
+| Manifest, state, initial load | `lite/herdr-plugin.toml:54` → `requireStateDir` at `src/manager.ts:30`; `reloadActive`/`reloadArchives` at `:55`/`:66`. | `lite-rs/herdr-plugin.toml:64` → dispatcher → `manager::run` at `rust/src/manager.rs:724`; `ManagerApp::load` at `:63`; reload methods at `:80`/`:95`. | `process.manager.missing-state`; initial screens in all manager PTY cases. |
+| Active screen | `render` at `src/manager.ts:198` → `renderActive` at `:95`, with `clipped` at `:77`, formatting helpers, newest-first state, source and timestamp metadata. | `ManagerApp::draw` at `rust/src/manager.rs:110` → `draw_active` at `:162`, with `clipped` at `:681` and `format_timestamp` at `:691`. | Every active-view snapshot, including the detail-width regression fixture in `screen.manager.all-views`. |
+| Archive screen | `render` → `renderArchives` at `src/manager.ts:138`; archive annotations are previewed newest first. | `ManagerApp::draw` → `draw_archives` at `rust/src/manager.rs:300`; same preview ordering and clipping. | Every archive-view snapshot and scripted archive mutation. |
+| Input and mutations | Top-level key dispatch is `src/manager.ts:404`; active/archive handlers are `:320`/`:346`; action functions are `:218`–`:318`. | `ManagerApp::handle_key` is `rust/src/manager.rs:434`; view handlers are `:466`/`:503`; action methods are `:547`–`:651`. | `screen.manager.all-views`, empty-actions, success-copy sessions, and the exit/signal sessions. Resulting JSONL and clipboard bytes are compared. |
+| Cleanup and signals | `cleanup`/`exit` at `src/manager.ts:378`/`:385`; signal handlers at `:392`. | `Termination` at `rust/src/termination.rs:17`; polling/restore at `rust/src/manager.rs:724`. | `screen.manager.sighup` compares exit 0 and restored cells. |
 
 ## Every editor key
 
@@ -126,23 +130,23 @@ transition.
 
 ## Every manager key in both views
 
-The common TypeScript dispatcher is `src/manager.ts:402`; Rust's is `rust/src/manager.rs:433`.
+The common TypeScript dispatcher is `src/manager.ts:404`; Rust's is `rust/src/manager.rs:434`.
 Each non-exit transition re-renders the full grid. Arrow Up/Down are aliases of `k`/`j` and are
 also fed by `screen.manager.all-views`.
 
 | Key | Active view: TypeScript → Rust and effect | Archives view: TypeScript → Rust and effect | Evidence |
 |---|---|---|---|
-| `j` / Down | `handleActiveKey` `src/manager.ts:328` → `handle_active_key` `rust/src/manager.rs:477`; increment/clamp active selection, changing list highlight and detail. | `handleArchiveKey` `src/manager.ts:364` → `handle_archive_key` `rust/src/manager.rs:526`; increment/clamp archive selection and detail. | `active-j`, `active-arrow-down`, `archives-j`, `archives-arrow-down`. |
-| `k` / Up | `src/manager.ts:326` → `rust/src/manager.rs:474`; decrement/saturate. | `src/manager.ts:362` → `rust/src/manager.rs:523`; decrement/saturate. | Corresponding `k` and arrow-up steps. |
-| `y` | `copy` at `src/manager.ts:216` receives the selected annotation → `ManagerApp::copy` at `rust/src/manager.rs:546`; exact one-item Markdown is copied; success exits 0, failure/empty displays status. | Same helpers receive the selected archive's annotations in newest-first order (`src/manager.ts:366`, `rust/src/manager.rs:528`). | Failure frames in all-views, success sessions `store.manager.active-y-success` / `archives-y-success`, and empty-actions. |
-| `c` | `src/manager.ts:335` copies the displayed newest-first active list → `rust/src/manager.rs:491`; success exits, failure remains. | Not handled by `src/manager.ts:344` or `rust/src/manager.rs:502`; clears any prior confirmation/status through normal dispatch, otherwise store/view unchanged. | Active failure/success and `archives-c-ignored`. |
-| `C` | `copyAndArchive` at `src/manager.ts:225` → `copyAndArchiveAnnotations` at `src/archive-workflow.ts:29`; Rust `rust/src/manager.rs:553` → `copy_and_archive_annotations` at `rust/src/archive_workflow.rs:27`. Order is load → copy → append archive → remove captured active IDs. Success exits; partial failure is reported without data loss. | Not handled; same no-op/confirmation-clear behavior as archive `c`. | Failure in all-views; success and byte-diff in `store.manager.copy-archive`; `archives-C-ignored`; workflow failure ordering has paired TS/Rust unit specs. |
-| `d` | `deleteSelectedAnnotation` at `src/manager.ts:243` → `rust/src/manager.rs:574`; remove selected ID through locked atomic rewrite, reload, status `Annotation deleted.` | First press records the selected archive id and renders `Press d again…`; second matching press calls `deleteSelectedArchive` (`src/manager.ts:295`, `rust/src/manager.rs:638`) and atomically removes it. No selection displays `No archive selected.` Esc or another ordinary key cancels confirmation. | Active delete, archive confirm/cancel/double-confirm in all-views; empty-actions. |
-| `D` | `src/manager.ts:319` / `rust/src/manager.rs:466`: first press renders `Press Shift+D again…`; second calls `clearActive` (`src/manager.ts:255`, `rust/src/manager.rs:588`), rewrites active JSONL empty, reloads, and displays `All active annotations cleared.` | Uppercase `D` is not an archive action; it cancels a pending archive confirmation like any non-`d` archive key, otherwise no store effect. | Active confirm/cancel/double-confirm and `archives-D-ignored` in all-views. |
-| `r` | `reloadActive` (`src/manager.ts:53`, `rust/src/manager.rs:79`); success status `Reloaded.`, failure status is the store error. | `reloadArchives` (`src/manager.ts:64`, `rust/src/manager.rs:94`) with the same status rule. | Both reload steps in all-views; invalid/busy store process cases cover propagated store errors. |
-| `u` | Not handled in active view; clears transient status/confirmation, leaves selection and stores unchanged. | `restoreSelectedArchive` at `src/manager.ts:269` → `restoreArchivedSet` at `src/archive-workflow.ts:71`; Rust `rust/src/manager.rs:605` → `restore_archived_set` at `rust/src/archive_workflow.rs:96`. Order is merge missing annotation IDs, then remove archive; partial removal failure keeps the archive and reports it. | `active-u-ignored`; archive restore in all-views; no-selection in empty-actions; paired workflow unit specs cover partial failures and concurrent active records. |
-| Tab | `switchView` at `src/manager.ts:306` → `rust/src/manager.rs:650`; clear confirmation/status, switch view, reload destination store. | Same in reverse. | Both Tab directions in all-views and all archive exit sessions. |
-| Esc | `src/manager.ts:404`: if confirming, clear confirmation/status and stay; otherwise cleanly exit. Rust `rust/src/manager.rs:439` is identical. | Same. | Active confirmation cancel and active exit; archive confirmation cancel and archive exit. |
+| `j` / Down | `handleActiveKey` `src/manager.ts:330` → `handle_active_key` `rust/src/manager.rs:478`; increment/clamp active selection, changing list highlight and detail. | `handleArchiveKey` `src/manager.ts:366` → `handle_archive_key` `rust/src/manager.rs:527`; increment/clamp archive selection and detail. | `active-j`, `active-arrow-down`, `archives-j`, `archives-arrow-down`. |
+| `k` / Up | `src/manager.ts:328` → `rust/src/manager.rs:475`; decrement/saturate. | `src/manager.ts:364` → `rust/src/manager.rs:524`; decrement/saturate. | Corresponding `k` and arrow-up steps. |
+| `y` | `copy` at `src/manager.ts:218` receives the selected annotation → `ManagerApp::copy` at `rust/src/manager.rs:547`; exact one-item Markdown is copied; success exits 0, failure/empty displays status. | Same helpers receive the selected archive's annotations in newest-first order (`src/manager.ts:368`, `rust/src/manager.rs:529`). | Failure frames in all-views, success sessions `store.manager.active-y-success` / `archives-y-success`, and empty-actions. |
+| `c` | `src/manager.ts:337` copies the displayed newest-first active list → `rust/src/manager.rs:492`; success exits, failure remains. | Not handled by `src/manager.ts:346` or `rust/src/manager.rs:503`; clears any prior confirmation/status through normal dispatch, otherwise store/view unchanged. | Active failure/success and `archives-c-ignored`. |
+| `C` | `copyAndArchive` at `src/manager.ts:227` → `copyAndArchiveAnnotations` at `src/archive-workflow.ts:29`; Rust `rust/src/manager.rs:554` → `copy_and_archive_annotations` at `rust/src/archive_workflow.rs:27`. Order is load → copy → append archive → remove captured active IDs. Success exits; partial failure is reported without data loss. | Not handled; same no-op/confirmation-clear behavior as archive `c`. | Failure in all-views; success and byte-diff in `store.manager.copy-archive`; `archives-C-ignored`; workflow failure ordering has paired TS/Rust unit specs. |
+| `d` | `deleteSelectedAnnotation` at `src/manager.ts:245` → `rust/src/manager.rs:575`; remove selected ID through locked atomic rewrite, reload, status `Annotation deleted.` | First press records the selected archive id and renders `Press d again…`; second matching press calls `deleteSelectedArchive` (`src/manager.ts:297`, `rust/src/manager.rs:639`) and atomically removes it. No selection displays `No archive selected.` Esc or another ordinary key cancels confirmation. | Active delete, archive confirm/cancel/double-confirm in all-views; empty-actions. |
+| `D` | `src/manager.ts:321` / `rust/src/manager.rs:467`: first press renders `Press Shift+D again…`; second calls `clearActive` (`src/manager.ts:257`, `rust/src/manager.rs:589`), rewrites active JSONL empty, reloads, and displays `All active annotations cleared.` | Uppercase `D` is not an archive action; it cancels a pending archive confirmation like any non-`d` archive key, otherwise no store effect. | Active confirm/cancel/double-confirm and `archives-D-ignored` in all-views. |
+| `r` | `reloadActive` (`src/manager.ts:55`, `rust/src/manager.rs:80`); success status `Reloaded.`, failure status is the store error. | `reloadArchives` (`src/manager.ts:66`, `rust/src/manager.rs:95`) with the same status rule. | Both reload steps in all-views; invalid/busy store process cases cover propagated store errors. |
+| `u` | Not handled in active view; clears transient status/confirmation, leaves selection and stores unchanged. | `restoreSelectedArchive` at `src/manager.ts:271` → `restoreArchivedSet` at `src/archive-workflow.ts:71`; Rust `rust/src/manager.rs:606` → `restore_archived_set` at `rust/src/archive_workflow.rs:96`. Order is merge missing annotation IDs, then remove archive; partial removal failure keeps the archive and reports it. | `active-u-ignored`; archive restore in all-views; no-selection in empty-actions; paired workflow unit specs cover partial failures and concurrent active records. |
+| Tab | `switchView` at `src/manager.ts:308` → `rust/src/manager.rs:651`; clear confirmation/status, switch view, reload destination store. | Same in reverse. | Both Tab directions in all-views and all archive exit sessions. |
+| Esc | `src/manager.ts:406`: if confirming, clear confirmation/status and stay; otherwise cleanly exit. Rust `rust/src/manager.rs:440` is identical. | Same. | Active confirmation cancel and active exit; archive confirmation cancel and archive exit. |
 | `q` | Common dispatcher exits 0 through cleanup. | Same. | Active `q` in all-views; `screen.manager.q-archives`. |
 | Ctrl+C | Common dispatcher exits 0 through cleanup. | Same. | `screen.manager.control-c-active` and `control-c-archives`. |
 
@@ -152,9 +156,9 @@ also fed by `screen.manager.all-views`.
 |---|---|---|---|
 | Markdown export | `formatAnnotations` at `src/format.ts:44`; `fenceFor` at `:38`. | `format_annotations` at `rust/src/format.rs:67`; `fence_for` at `:52`. | Both emit `# Annotated context`, then newest-first `## Annotation N` sections. Optional source is `workspace_label / tab_label`; selected text and comment retain line breaks; selected text uses a backtick fence one longer than its longest run (minimum three); duplicate blank lines are collapsed; the document ends in exactly one `\n`. Populated/single copy and cross-read compare raw clipboard bytes using backticks, multiline text, and wide characters. |
 | Terminal-safe text | `sanitizeTerminalText`/`wrapText` at `src/format.ts:5`/`:12`. | `sanitize_terminal_text`/`wrap_text` at `rust/src/format.rs:7`/`:26`. | Control characters are removed except newline/tab, tabs become four spaces, CRLF becomes LF, explicit newlines are preserved, and wrapping uses terminal cells. Editor and both manager views compare resulting cells. |
-| Width and clipping | `charWidth`, `stringWidth`, `truncateToWidth` at `src/width.ts:37`/`:48`/`:55`; manager `clipped` at `src/manager.ts:75`. | `char_width`, `string_width`, `truncate_to_width` at `rust/src/width.rs:35`/`:47`/`:52`; manager `clipped` at `rust/src/manager.rs:680`. | Same zero-width controls/combining ranges and same wide ranges; truncation never splits a wide glyph and adds exactly one ellipsis cell. Wide input occurs in editor, list, detail, metadata, and archive snapshots. |
+| Width and clipping | `charWidth`, `stringWidth`, `truncateToWidth` at `src/width.ts:37`/`:48`/`:55`; manager `clipped` at `src/manager.ts:77`. | `char_width`, `string_width`, `truncate_to_width` at `rust/src/width.rs:35`/`:47`/`:52`; manager `clipped` at `rust/src/manager.rs:681`. | Same zero-width controls/combining ranges and same wide ranges; truncation never splits a wide glyph and adds exactly one ellipsis cell. Wide input occurs in editor, list, detail, metadata, and archive snapshots. |
 | Editor geometry | `render` at `src/editor.ts:77` and `layoutComment` at `src/layout.ts:9`. | `EditorApp::draw` at `rust/src/editor.rs:67` and `layout_comment` at `rust/src/layout.rs:14`. | At 86×22, identical selected-text cap/overflow marker, comment viewport, cursor cell, footer/status placement, and full clears. Every editor input has a post-step grid diff. |
-| Manager geometry and labels | `render`/active/archive/footer at `src/manager.ts:196`/`:93`/`:136`/`:182`. | `ManagerApp::draw`/active/archive/footer at `rust/src/manager.rs:109`/`:161`/`:299`/`:408`. | At 98×28, identical 36%-clamped list, divider, selected marker/reverse cell region, detail width, newest-first labels, counts, metadata line, preview overflow, empty-state text, confirmation footer, help footer, and transient status. The archive clipping boundary that exposed the earlier one-cell defect is in every seeded archive screen. |
+| Manager geometry and labels | `render`/active/archive/footer at `src/manager.ts:198`/`:95`/`:138`/`:184`. | `ManagerApp::draw`/active/archive/footer at `rust/src/manager.rs:110`/`:162`/`:300`/`:409`. | At 98×28, identical 36%-clamped list, divider, selected marker/reverse cell region, detail width, newest-first labels, counts, metadata line, preview overflow, empty-state text, confirmation footer, help footer, and transient status. The archive clipping boundary that exposed the earlier one-cell defect is in every seeded archive screen. |
 
 ## Filesystem effects
 
@@ -215,6 +219,24 @@ Clipboard candidates and arguments are defined at `src/clipboard.ts:13`/`:30` an
 | Windows | `powershell.exe -NoProfile -NonInteractive -Command "Get-Clipboard -Raw"` | `powershell.exe -NoProfile -NonInteractive -Command "$input | Set-Clipboard"` |
 | Linux/other Unix | `wl-paste --no-newline`; `xclip -selection clipboard -out`; `xsel --clipboard --output` | `wl-copy`; `xclip -selection clipboard -in`; `xsel --clipboard --input` |
 
+### Pane copies and OSC 52
+
+Herdr 0.9.0 forwards OSC 52 sequences emitted by pane output to the viewing client, so a copy made
+inside a pane can reach the clipboard of the machine the person is sitting at even when the plugin
+runs on a different server. Only the manager pane can use this path: the global `copy-context` and
+`copy-archive` actions run with piped stdout and no terminal, so their behavior is unchanged.
+
+| Behavior | TypeScript | Rust | Proof |
+|---|---|---|---|
+| Sequence encoding | `osc52ClipboardSequence` at `src/pane-clipboard.ts:18` builds `ESC ] 52 ; c ; <base64 of the UTF-8 bytes> BEL`. | `osc52_clipboard_sequence` at `rust/src/pane_clipboard.rs:42` over the same bytes, with a hand-rolled base64 at `:17`. | `test/pane-clipboard.test.ts` and `pane_clipboard::tests` assert the exact bytes for `hi` (`\x1b]52;c;aGk=\x07`), an empty string, and multi-byte UTF-8; `store.manager.*` compares the sequences observed on real PTYs. |
+| Emission point | `paneClipboardWriter` at `src/pane-clipboard.ts:34` wraps `writeClipboard`; `src/manager.ts:41` injects it into both manager copy call sites. | `write_pane_clipboard` at `rust/src/pane_clipboard.rs:64` wrapped by `pane_clipboard_write` at `rust/src/manager.rs:703` and injected at `:548`/`:558`. | Both runtimes emit exactly once per writer call, after the native attempt and before the next frame, so the emitted sequence lists match step for step. |
+| Native failure | The native error is kept and prefixed, so the manager stays open and reports the copy that did land. | Identical string through `map_err`. | `store.manager.osc52-remote-copy` compares the status frame, the emitted sequence, and the resulting store. |
+| Oversized payloads | `exceedsCommonOsc52Limit` at `src/pane-clipboard.ts:26`. | `exceeds_common_osc52_limit` at `rust/src/pane_clipboard.rs:47`. | Terminals commonly refuse a base64 payload over 74994 bytes. Both runtimes emit the full sequence anyway and never truncate a copy; the predicate exists so the limit is stated rather than silently applied. |
+
+Replacing one runtime's emitter with a no-op and rerunning the harness fails six cases
+(`screen.manager.all-views`, the three `*-success` sessions, `store.manager.copy-archive`, and
+`store.manager.osc52-remote-copy`), so these comparisons are not vacuously green.
+
 Readers return the first exit-0 stdout, decoded with UTF-8 replacement. Writers pipe the exact UTF-8
 Markdown to stdin and accept the first exit-0 adapter. Child stdout/stderr is suppressed. The fake
 adapters log every attempt and capture writer stdin; macOS and Ubuntu CI together prove both Unix
@@ -239,7 +261,7 @@ the prefix exactly as shown.
 
 | Exact string or template | TypeScript emitter | Rust emitter | Proof |
 |---|---|---|---|
-| `HERDR_PLUGIN_STATE_DIR is not set` | `src/capture.ts:22`, `src/export.ts:9`, `src/export-archive.ts:48`, `src/manager.ts:32` | `rust/src/cli.rs:69`/`:125`/`:185`, `rust/src/manager.rs:719` | Missing-state process cases. |
+| `HERDR_PLUGIN_STATE_DIR is not set` | `src/capture.ts:22`, `src/export.ts:9`, `src/export-archive.ts:48`, `src/manager.ts:33` | `rust/src/cli.rs:69`/`:125`/`:185`, `rust/src/manager.rs:725` | Missing-state process cases. |
 | `HERDR_PLUGIN_ROOT is not set` | `src/capture.ts:24`, `src/open-manager.ts:7` | `rust/src/cli.rs:70`/`:215` | Missing-root cases. |
 | `No supported clipboard reader is available` | `src/clipboard.ts:59` | `rust/src/clipboard.rs:106` | `process.capture.no-clipboard`. |
 | `Missing pending annotation` | `src/editor.ts:32` | `rust/src/editor.rs:326` | `process.editor.missing-pending`. |
@@ -254,10 +276,11 @@ the prefix exactly as shown.
 | `Annotations are busy; try again.` / `Archives are busy; try again.` | `src/store.ts:224`/`:235` | `rust/src/store.rs:314`/`:324` | Active busy-lock differential plus paired per-store tests. |
 | `Unable to update annotations[ (<CODE>)]` / `Unable to update archives[ (<CODE>)]` | prefixes supplied at `src/store.ts:135`/`:147` | `rust/src/store.rs:202`/`:223` | Static catalog and rewrite failure unit paths. |
 | `Nothing to copy.` | `src/manager-copy.ts:18` | `rust/src/manager_copy.rs:20` | `screen.manager.empty-actions`. |
+| `Copied to this terminal. Server clipboard: <clipboard error>` | `src/pane-clipboard.ts:42` | `rust/src/pane_clipboard.rs:71` | `store.manager.osc52-remote-copy` and `screen.manager.all-views` failure frames, plus paired unit specs. |
 | `Nothing to copy and archive.` | `src/archive-workflow.ts:35` | `rust/src/archive_workflow.rs:44` | `screen.manager.empty-actions`. |
-| `No archive selected.` | `src/manager.ts:272`/`:349` | `rust/src/manager.rs:504`/`:608` | `screen.manager.empty-actions`. |
-| `Copied and archived, but active annotations remain: <store error>` | `src/manager.ts:237`, `src/export-archive.ts:35` | `rust/src/manager.rs:569`, `rust/src/cli.rs:167` | Paired workflow partial-failure tests plus static catalog. |
-| `Annotations restored, but the archive remains: <store error>` | `src/manager.ts:287` | `rust/src/manager.rs:627` | Paired workflow partial-failure tests plus static catalog. |
+| `No archive selected.` | `src/manager.ts:274`/`:351` | `rust/src/manager.rs:505`/`:609` | `screen.manager.empty-actions`. |
+| `Copied and archived, but active annotations remain: <store error>` | `src/manager.ts:239`, `src/export-archive.ts:35` | `rust/src/manager.rs:570`, `rust/src/cli.rs:167` | Paired workflow partial-failure tests plus static catalog. |
+| `Annotations restored, but the archive remains: <store error>` | `src/manager.ts:289` | `rust/src/manager.rs:628` | Paired workflow partial-failure tests plus static catalog. |
 | Child `herdr` stderr, or `herdr <argv> failed` | `src/herdr.ts:20` | `rust/src/herdr.rs:32`–`:39` | Manage child-stderr and empty-stderr cases; capture pane failure. |
 
 `Unable to save annotation.` (with a period) at `src/editor.ts:146` is specifically a Bun dynamic
@@ -289,8 +312,10 @@ Notable differential groups:
 - `screen.editor.*`: both pending sources, every requested edit key, save branches, cancel keys, and SIGTERM.
 - `screen.manager.*`: both views, every view-valid key, ignored cross-view keys by handler mapping,
   both confirmation flows, empty actions, copy failure, exit keys, and SIGHUP.
-- `store.manager.*`: successful clipboard-only and copy/archive products; `store.cross-read` proves
-  each implementation parses and exports the other's editor-written record.
+- `store.manager.*`: successful clipboard-only and copy/archive products;
+  `store.manager.osc52-remote-copy` copies with the native writer failing, which is the remote-server
+  shape of issue #40; `store.cross-read` proves each implementation parses and exports the other's
+  editor-written record.
 
 The harness itself asserts the requested key-coverage set before it can print green.
 
@@ -310,8 +335,8 @@ No TypeScript source changed.
 ## Deliberate divergences
 
 There is one. TypeScript delegates manager timestamps to `Date.prototype.toLocaleString()` and the
-host's locale database (`src/manager.ts:132`, `:158`, `:169`). Rust parses into local time and emits
-the en-US shape explicitly (`rust/src/manager.rs:690`). The persisted ISO timestamp, ordering, export,
+host's locale database (`src/manager.ts:134`, `:160`, `:171`). Rust parses into local time and emits
+the en-US shape explicitly (`rust/src/manager.rs:691`). The persisted ISO timestamp, ordering, export,
 and en-US display are identical. A non-en-US host can display localized punctuation/order in
 TypeScript while Rust stays en-US. The harness pins UTC and en-US and compares the literal seeded
 timestamp cells; it does not normalize them.

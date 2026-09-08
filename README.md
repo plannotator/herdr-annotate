@@ -145,6 +145,10 @@ herdr server reload-config
 | `Ctrl+B Ctrl+A` | copy all annotations as Markdown, then archive them |
 | `Ctrl+B M` | manage · `y` copy one · `c` copy all · `Shift+C` copy and archive · `Tab` archives (`y` copy · `u` restore · `d d` delete) |
 
+Copies made inside the manager pane also emit OSC 52, so on Herdr 0.9.0 they reach the clipboard of
+the machine you are viewing from even when the plugin runs on a remote server; `Ctrl+B Shift+A` and
+`Ctrl+B Ctrl+A` do not, because those actions run outside a pane and have no terminal to write to.
+
 ### Review documents and agent replies
 
 Full install. Works with Claude Code, Codex, pi, Copilot CLI, Droid, Oh My Pi, Hermes CLI and OpenCode (1 and 2).

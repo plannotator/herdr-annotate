@@ -20,6 +20,7 @@ use crate::clipboard::write_clipboard;
 use crate::editor::now_iso_for_manager;
 use crate::format::{sanitize_terminal_text, wrap_text};
 use crate::manager_copy::{ManagerCopyOutcome, copy_annotations};
+use crate::pane_clipboard::{emit_to_terminal, write_pane_clipboard};
 use crate::paths::state_dir;
 use crate::store::{
     append_archived_set, load_annotations, load_archived_sets, merge_annotations,
@@ -544,7 +545,7 @@ impl ManagerApp {
     }
 
     fn copy(&mut self, items: &[Annotation]) {
-        match copy_annotations(items, write_clipboard) {
+        match copy_annotations(items, pane_clipboard_write) {
             ManagerCopyOutcome::Close => self.quit = true,
             ManagerCopyOutcome::StayOpen { message } => self.status = message,
         }
@@ -554,7 +555,7 @@ impl ManagerApp {
         let dir = self.dir.clone();
         let outcome = copy_and_archive_annotations(CopyAndArchiveDependencies {
             load_active: || load_annotations(&dir),
-            write_clipboard: |text: String| write_clipboard(&text),
+            write_clipboard: |text: String| pane_clipboard_write(&text),
             save_archive: |archive: ArchivedAnnotationSet| append_archived_set(&dir, &archive),
             remove_active: |ids: Vec<String>| remove_annotations_by_id(&dir, &ids),
             create_archive_id: || Uuid::new_v4().to_string(),
@@ -696,6 +697,11 @@ fn format_timestamp(value: &str) -> String {
                 .to_string()
         },
     )
+}
+
+/// Write a pane copy to the native clipboard and to the viewing client through OSC 52.
+fn pane_clipboard_write(text: &str) -> Result<(), String> {
+    write_pane_clipboard(text, write_clipboard, emit_to_terminal)
 }
 
 fn render_line(frame: &mut Frame<'_>, x: usize, y: usize, text: &str, width: usize, style: Style) {

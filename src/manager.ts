@@ -6,6 +6,7 @@ import { writeClipboard } from "./clipboard";
 import { sanitizeTerminalText, wrapText } from "./format";
 import { stringWidth, truncateToWidth } from "./width";
 import { copyAnnotations } from "./manager-copy";
+import { paneClipboardWriter } from "./pane-clipboard";
 import { stateDir } from "./paths";
 import {
   appendArchivedSet,
@@ -37,6 +38,7 @@ function requireStateDir(): string {
 
 const dir = requireStateDir();
 const out = (value: string) => process.stdout.write(value);
+const writePaneClipboard = paneClipboardWriter(writeClipboard, out);
 let annotations: Annotation[] = [];
 let archives: ArchivedAnnotationSet[] = [];
 let activeSelected = 0;
@@ -214,7 +216,7 @@ function render(): void {
 }
 
 function copy(items: readonly Annotation[]): void {
-  const outcome = copyAnnotations(items, writeClipboard);
+  const outcome = copyAnnotations(items, writePaneClipboard);
   if (outcome._tag === "stay_open") {
     status = outcome.message;
     return;
@@ -225,7 +227,7 @@ function copy(items: readonly Annotation[]): void {
 function copyAndArchive(): void {
   const outcome = copyAndArchiveAnnotations({
     loadActive: () => loadAnnotations(dir),
-    writeClipboard,
+    writeClipboard: writePaneClipboard,
     saveArchive: (archive) => appendArchivedSet(dir, archive),
     removeActive: (annotationIds) => removeAnnotationsById(dir, annotationIds),
     createArchiveId: () => crypto.randomUUID(),

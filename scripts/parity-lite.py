@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import codecs
 import copy
 import difflib
@@ -108,6 +109,7 @@ class Step:
 class PtyResult:
     screens: list[tuple[str, tuple[tuple[str, ...], ...]]]
     exit_code: int
+    osc52: list[str]
 
 
 class Proof:
@@ -325,6 +327,7 @@ class PtySession:
         os.set_blocking(master, False)
         self.master = master
         self.grid = TerminalGrid(rows, cols)
+        self.raw = bytearray()
 
     def drain(self, *, quiet: float = 0.08, maximum: float = 2.0) -> None:
         deadline = time.monotonic() + maximum
@@ -344,6 +347,7 @@ class PtySession:
                 if self.process.poll() is not None:
                     return
                 continue
+            self.raw.extend(data)
             self.grid.feed(data)
             quiet_deadline = time.monotonic() + quiet
 
@@ -376,6 +380,27 @@ class PtySession:
         self.drain(quiet=0.02, maximum=0.2)
         os.close(self.master)
         return code
+
+
+OSC52_PATTERN = re.compile(rb"\x1b\]52;([^;]*);([A-Za-z0-9+/=]*)(?:\x07|\x1b\\)")
+
+
+def osc52_sequences(raw: bytes) -> list[str]:
+    """Every OSC 52 clipboard sequence a pane wrote to its terminal, in emission order.
+
+    Sequences are pure ASCII, so they are kept as text and stay readable in a divergence diff.
+    """
+    return [match.group(0).decode("ascii", "backslashreplace") for match in OSC52_PATTERN.finditer(raw)]
+
+
+def osc52_payload(sequences: Sequence[str]) -> bytes:
+    """The text carried by the last OSC 52 sequence, which is the copy the client keeps."""
+    if not sequences:
+        return b""
+    match = OSC52_PATTERN.fullmatch(sequences[-1].encode("ascii", "backslashreplace"))
+    if match is None:
+        return b""
+    return base64.b64decode(match.group(2))
 
 
 def safe_name(value: str) -> str:
@@ -684,7 +709,13 @@ class Harness:
                     session.send_signal(step.process_signal)
                 screens.append((step.label, session.grid.snapshot()))
             code = session.finish()
-            results[implementation] = (PtyResult(screens, code), state, runtime, log, clipboard_output)
+            results[implementation] = (
+                PtyResult(screens, code, osc52_sequences(bytes(session.raw))),
+                state,
+                runtime,
+                log,
+                clipboard_output,
+            )
         ts, rs = results["typescript"], results["rust"]
         roots = [ts[1], ts[2], rs[1], rs[2], self.workspace]
         self.proof.compare(f"{name}.exit", ts[0].exit_code, rs[0].exit_code)
@@ -693,11 +724,23 @@ class Harness:
             self.proof.compare(f"{name}.screen.{ts_label}.label", ts_label, rs_label)
             self.proof.compare(f"{name}.screen.{ts_label}", ts_screen, rs_screen, screen=True)
         self.proof.compare(f"{name}.processes", read_process_log(ts[3], roots), read_process_log(rs[3], roots))
+        self.proof.compare(f"{name}.osc52", ts[0].osc52, rs[0].osc52)
         if compare_clipboard:
+            ts_clipboard = normalize_bytes(ts[4].read_bytes() if ts[4].exists() else b"", roots)
+            rs_clipboard = normalize_bytes(rs[4].read_bytes() if rs[4].exists() else b"", roots)
+            self.proof.compare(f"{name}.clipboard", ts_clipboard, rs_clipboard)
+            # Every pane copy reaches the viewing client too: the payload the terminal received is
+            # byte-for-byte the text the native writer was handed.
+            def readable(value: bytes) -> str:
+                return value.decode("utf-8", "backslashreplace")
+
             self.proof.compare(
-                f"{name}.clipboard",
-                normalize_bytes(ts[4].read_bytes() if ts[4].exists() else b"", roots),
-                normalize_bytes(rs[4].read_bytes() if rs[4].exists() else b"", roots),
+                f"{name}.osc52-payload",
+                [readable(ts_clipboard), readable(rs_clipboard)],
+                [
+                    readable(normalize_bytes(osc52_payload(ts[0].osc52), roots)),
+                    readable(normalize_bytes(osc52_payload(rs[0].osc52), roots)),
+                ],
             )
         if compare_state:
             self.proof.compare(f"{name}.state", state_snapshot(ts[1], roots), state_snapshot(rs[1], roots))
@@ -1375,6 +1418,24 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         28,
         98,
         manager_seed,
+        compare_state=True,
+        compare_clipboard=True,
+    )
+
+    # A pane copy on a machine with no working clipboard writer: the native write fails, the OSC 52
+    # sequence still reaches the viewing client, and the manager stays open saying so.
+    harness.pty_pair(
+        "store.manager.osc52-remote-copy",
+        "manager",
+        [
+            Step("copy-one", b"y", ("manager:active:y",)),
+            Step("quit", b"q", ("manager:active:q",)),
+        ],
+        "Annotations (",
+        28,
+        98,
+        manager_seed,
+        {"PARITY_CLIPBOARD_FAIL": "write"},
         compare_state=True,
         compare_clipboard=True,
     )
