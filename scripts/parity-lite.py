@@ -1263,9 +1263,6 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         Step("active-k", b"k", ("manager:active:k",)),
         Step("active-arrow-down", b"\x1b[B"),
         Step("active-arrow-up", b"\x1b[A"),
-        Step("active-y-failure", b"y", ("manager:active:y",)),
-        Step("active-c-failure", b"c", ("manager:active:c",)),
-        Step("active-C-failure", b"C", ("manager:active:C",)),
         Step("active-delete", b"d", ("manager:active:d",)),
         Step("active-clear-confirm", b"D", ("manager:active:D",)),
         Step("active-clear-cancel", b"\x1b", ("manager:active:Esc",)),
@@ -1278,7 +1275,6 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         Step("archives-k", b"k", ("manager:archives:k",)),
         Step("archives-arrow-down", b"\x1b[B"),
         Step("archives-arrow-up", b"\x1b[A"),
-        Step("archives-y-failure", b"y", ("manager:archives:y",)),
         Step("archives-reload", b"r", ("manager:archives:r",)),
         Step("archives-c-ignored", b"c", ("manager:archives:c",)),
         Step("archives-C-ignored", b"C", ("manager:archives:C",)),
@@ -1299,7 +1295,6 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         28,
         98,
         manager_seed,
-        {"PARITY_CLIPBOARD_FAIL": "write"},
         compare_state=True,
         compare_clipboard=True,
     )
@@ -1422,23 +1417,43 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         compare_clipboard=True,
     )
 
-    # A pane copy on a machine with no working clipboard writer: the native write fails, the OSC 52
-    # sequence still reaches the viewing client, and the manager stays open saying so.
-    harness.pty_pair(
-        "store.manager.osc52-remote-copy",
-        "manager",
-        [
-            Step("copy-one", b"y", ("manager:active:y",)),
-            Step("quit", b"q", ("manager:active:q",)),
-        ],
-        "Annotations (",
-        28,
-        98,
-        manager_seed,
-        {"PARITY_CLIPBOARD_FAIL": "write"},
-        compare_state=True,
-        compare_clipboard=True,
-    )
+    # A pane copy on a machine with no working clipboard writer, which is the remote-server shape of
+    # issue #40: the native write fails, the OSC 52 sequence still reaches the viewing client, and the
+    # copy is a success. `C` must therefore still archive and clear the active list.
+    for key, steps in (
+        ("osc52-remote-copy", [Step("copy-one", b"y", ("manager:active:y",))]),
+        ("osc52-remote-copy-all", [Step("copy-all", b"c", ("manager:active:c",))]),
+        ("osc52-remote-copy-archive", [Step("copy-archive", b"C", ("manager:active:C",))]),
+    ):
+        states = harness.pty_pair(
+            f"store.manager.{key}",
+            "manager",
+            steps,
+            "Annotations (",
+            28,
+            98,
+            manager_seed,
+            {"PARITY_CLIPBOARD_FAIL": "write"},
+            compare_state=True,
+            compare_clipboard=True,
+        )
+        if key != "osc52-remote-copy-archive":
+            continue
+        # The copy succeeded on the OSC 52 path alone, so copy-and-archive must have gone on to
+        # write its archive (a third, beside the two seeded) and clear the active list, rather than
+        # stopping at the copy.
+        for implementation, state in zip(("typescript", "rust"), states):
+            def records(name: str, state: Path = state) -> int:
+                path = state / name
+                if not path.exists():
+                    return 0
+                return len([line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()])
+
+            harness.proof.compare(
+                f"store.manager.{key}.archived.{implementation}",
+                {"archives": 3, "active": 0},
+                {"archives": records("archives.jsonl"), "active": records("annotations.jsonl")},
+            )
 
     harness.proof.require_coverage(EDITOR_REQUIRED | MANAGER_REQUIRED)
     return editor_ts, editor_rs

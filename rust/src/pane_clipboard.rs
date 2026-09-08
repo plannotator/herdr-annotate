@@ -48,27 +48,34 @@ pub fn exceeds_common_osc52_limit(text: &str) -> bool {
     base64(text.as_bytes()).len() > OSC52_COMMON_PAYLOAD_LIMIT_BYTES
 }
 
-/// Write the OSC 52 sequence to the pane's terminal.
+/// Write the OSC 52 sequence to the pane's terminal, reporting whether it was written.
 ///
-/// Emission is best effort: a terminal that drops the sequence must not fail the copy.
-pub fn emit_to_terminal(sequence: &str) {
+/// Best effort: a closed or broken stdout must not fail a copy with an I/O error.
+pub fn emit_to_terminal(sequence: &str) -> bool {
     let mut stdout = std::io::stdout();
-    let _ = stdout.write_all(sequence.as_bytes());
-    let _ = stdout.flush();
+    stdout
+        .write_all(sequence.as_bytes())
+        .and_then(|()| stdout.flush())
+        .is_ok()
 }
 
 /// Perform a pane clipboard write: the native write first, then the OSC 52 sequence.
 ///
-/// When only the sequence lands the result reports the copy that succeeded and keeps the native
-/// failure visible instead of hiding it behind a bare success.
+/// Either one landing is a successful copy: a remote server commonly has no clipboard tool at all,
+/// and the sequence is the copy that actually reached the person, so it must not be reported as a
+/// failure or block the rest of a copy-and-archive. Only a copy that reached neither destination
+/// fails, with the native error.
 pub fn write_pane_clipboard(
     text: &str,
     write_clipboard: impl FnOnce(&str) -> Result<(), String>,
-    emit: impl FnOnce(&str),
+    emit: impl FnOnce(&str) -> bool,
 ) -> Result<(), String> {
     let native = write_clipboard(text);
-    emit(&osc52_clipboard_sequence(text));
-    native.map_err(|message| format!("Copied to this terminal. Server clipboard: {message}"))
+    let emitted = emit(&osc52_clipboard_sequence(text));
+    if native.is_ok() || emitted {
+        return Ok(());
+    }
+    native
 }
 
 #[cfg(test)]
@@ -129,7 +136,10 @@ mod tests {
                 order.borrow_mut().push(format!("native:{text}"));
                 Ok(())
             },
-            |sequence| order.borrow_mut().push(format!("emit:{sequence}")),
+            |sequence| {
+                order.borrow_mut().push(format!("emit:{sequence}"));
+                true
+            },
         );
         assert_eq!(result, Ok(()));
         assert_eq!(
@@ -139,20 +149,30 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_native_write_still_emits_and_reports_the_terminal_copy() {
+    fn a_copy_the_terminal_received_succeeds_even_when_the_native_write_failed() {
         let emitted = RefCell::new(Vec::new());
         let result = write_pane_clipboard(
             "hi",
             |_| Err("No supported clipboard writer is available".to_owned()),
-            |sequence| emitted.borrow_mut().push(sequence.to_owned()),
+            |sequence| {
+                emitted.borrow_mut().push(sequence.to_owned());
+                true
+            },
+        );
+        assert_eq!(result, Ok(()));
+        assert_eq!(*emitted.borrow(), vec!["\x1b]52;c;aGk=\x07".to_owned()]);
+    }
+
+    #[test]
+    fn a_copy_that_reached_neither_destination_fails_with_the_native_error() {
+        let result = write_pane_clipboard(
+            "hi",
+            |_| Err("No supported clipboard writer is available".to_owned()),
+            |_| false,
         );
         assert_eq!(
             result,
-            Err(
-                "Copied to this terminal. Server clipboard: No supported clipboard writer is available"
-                    .to_owned()
-            )
+            Err("No supported clipboard writer is available".to_owned())
         );
-        assert_eq!(*emitted.borrow(), vec!["\x1b]52;c;aGk=\x07".to_owned()]);
     }
 }

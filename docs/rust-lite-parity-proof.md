@@ -5,7 +5,7 @@ TypeScript Lite surface to the Rust call path at function granularity and names 
 case that compares the result. The current local result is:
 
 ```text
-Parity Lite: 496 observables compared, 95 screens diffed, zero divergences / 1 deliberate
+Parity Lite: 510 observables compared, 94 screens diffed, zero divergences / 1 deliberate
 ```
 
 Run it from the repository root with `bash scripts/parity-lite.sh`. The shell wrapper stages a fresh
@@ -138,9 +138,9 @@ also fed by `screen.manager.all-views`.
 |---|---|---|---|
 | `j` / Down | `handleActiveKey` `src/manager.ts:330` → `handle_active_key` `rust/src/manager.rs:478`; increment/clamp active selection, changing list highlight and detail. | `handleArchiveKey` `src/manager.ts:366` → `handle_archive_key` `rust/src/manager.rs:527`; increment/clamp archive selection and detail. | `active-j`, `active-arrow-down`, `archives-j`, `archives-arrow-down`. |
 | `k` / Up | `src/manager.ts:328` → `rust/src/manager.rs:475`; decrement/saturate. | `src/manager.ts:364` → `rust/src/manager.rs:524`; decrement/saturate. | Corresponding `k` and arrow-up steps. |
-| `y` | `copy` at `src/manager.ts:218` receives the selected annotation → `ManagerApp::copy` at `rust/src/manager.rs:547`; exact one-item Markdown is copied; success exits 0, failure/empty displays status. | Same helpers receive the selected archive's annotations in newest-first order (`src/manager.ts:368`, `rust/src/manager.rs:529`). | Failure frames in all-views, success sessions `store.manager.active-y-success` / `archives-y-success`, and empty-actions. |
-| `c` | `src/manager.ts:337` copies the displayed newest-first active list → `rust/src/manager.rs:492`; success exits, failure remains. | Not handled by `src/manager.ts:346` or `rust/src/manager.rs:503`; clears any prior confirmation/status through normal dispatch, otherwise store/view unchanged. | Active failure/success and `archives-c-ignored`. |
-| `C` | `copyAndArchive` at `src/manager.ts:227` → `copyAndArchiveAnnotations` at `src/archive-workflow.ts:29`; Rust `rust/src/manager.rs:554` → `copy_and_archive_annotations` at `rust/src/archive_workflow.rs:27`. Order is load → copy → append archive → remove captured active IDs. Success exits; partial failure is reported without data loss. | Not handled; same no-op/confirmation-clear behavior as archive `c`. | Failure in all-views; success and byte-diff in `store.manager.copy-archive`; `archives-C-ignored`; workflow failure ordering has paired TS/Rust unit specs. |
+| `y` | `copy` at `src/manager.ts:218` receives the selected annotation → `ManagerApp::copy` at `rust/src/manager.rs:547`; exact one-item Markdown is copied; success exits 0, an empty selection displays status. | Same helpers receive the selected archive's annotations in newest-first order (`src/manager.ts:368`, `rust/src/manager.rs:529`). | Success sessions `store.manager.active-y-success` / `archives-y-success` / `osc52-remote-copy`, and empty-actions. |
+| `c` | `src/manager.ts:337` copies the displayed newest-first active list → `rust/src/manager.rs:492`; success exits. | Not handled by `src/manager.ts:346` or `rust/src/manager.rs:503`; clears any prior confirmation/status through normal dispatch, otherwise store/view unchanged. | `store.manager.active-c-success`, `osc52-remote-copy-all`, and `archives-c-ignored`. |
+| `C` | `copyAndArchive` at `src/manager.ts:227` → `copyAndArchiveAnnotations` at `src/archive-workflow.ts:29`; Rust `rust/src/manager.rs:554` → `copy_and_archive_annotations` at `rust/src/archive_workflow.rs:27`. Order is load → copy → append archive → remove captured active IDs. Success exits; partial failure is reported without data loss. | Not handled; same no-op/confirmation-clear behavior as archive `c`. | Success and byte-diff in `store.manager.copy-archive`; `osc52-remote-copy-archive` proves the archive still runs when only the terminal copy landed; `archives-C-ignored`; workflow failure ordering has paired TS/Rust unit specs. |
 | `d` | `deleteSelectedAnnotation` at `src/manager.ts:245` → `rust/src/manager.rs:575`; remove selected ID through locked atomic rewrite, reload, status `Annotation deleted.` | First press records the selected archive id and renders `Press d again…`; second matching press calls `deleteSelectedArchive` (`src/manager.ts:297`, `rust/src/manager.rs:639`) and atomically removes it. No selection displays `No archive selected.` Esc or another ordinary key cancels confirmation. | Active delete, archive confirm/cancel/double-confirm in all-views; empty-actions. |
 | `D` | `src/manager.ts:321` / `rust/src/manager.rs:467`: first press renders `Press Shift+D again…`; second calls `clearActive` (`src/manager.ts:257`, `rust/src/manager.rs:589`), rewrites active JSONL empty, reloads, and displays `All active annotations cleared.` | Uppercase `D` is not an archive action; it cancels a pending archive confirmation like any non-`d` archive key, otherwise no store effect. | Active confirm/cancel/double-confirm and `archives-D-ignored` in all-views. |
 | `r` | `reloadActive` (`src/manager.ts:55`, `rust/src/manager.rs:80`); success status `Reloaded.`, failure status is the store error. | `reloadArchives` (`src/manager.ts:66`, `rust/src/manager.rs:95`) with the same status rule. | Both reload steps in all-views; invalid/busy store process cases cover propagated store errors. |
@@ -229,13 +229,18 @@ runs on a different server. Only the manager pane can use this path: the global 
 | Behavior | TypeScript | Rust | Proof |
 |---|---|---|---|
 | Sequence encoding | `osc52ClipboardSequence` at `src/pane-clipboard.ts:18` builds `ESC ] 52 ; c ; <base64 of the UTF-8 bytes> BEL`. | `osc52_clipboard_sequence` at `rust/src/pane_clipboard.rs:42` over the same bytes, with a hand-rolled base64 at `:17`. | `test/pane-clipboard.test.ts` and `pane_clipboard::tests` assert the exact bytes for `hi` (`\x1b]52;c;aGk=\x07`), an empty string, and multi-byte UTF-8; `store.manager.*` compares the sequences observed on real PTYs. |
-| Emission point | `paneClipboardWriter` at `src/pane-clipboard.ts:34` wraps `writeClipboard`; `src/manager.ts:41` injects it into both manager copy call sites. | `write_pane_clipboard` at `rust/src/pane_clipboard.rs:64` wrapped by `pane_clipboard_write` at `rust/src/manager.rs:703` and injected at `:548`/`:558`. | Both runtimes emit exactly once per writer call, after the native attempt and before the next frame, so the emitted sequence lists match step for step. |
-| Native failure | The native error is kept and prefixed, so the manager stays open and reports the copy that did land. | Identical string through `map_err`. | `store.manager.osc52-remote-copy` compares the status frame, the emitted sequence, and the resulting store. |
+| Emission point | `paneClipboardWriter` at `src/pane-clipboard.ts:49` wraps `writeClipboard`; `src/manager.ts:41` injects it into both manager copy call sites. | `write_pane_clipboard` at `rust/src/pane_clipboard.rs:68` wrapped by `pane_clipboard_write` at `rust/src/manager.rs:703` and injected at `:548`/`:558`. | Both runtimes emit exactly once per writer call, after the native attempt and before the next frame, so the emitted sequence lists match step for step. |
+| Native failure | Either destination landing is a successful copy (`src/pane-clipboard.ts:56`). A remote server commonly has no clipboard tool at all, and the sequence is the copy that actually reached the person, so it is not reported as a failure and does not stop a copy-and-archive before its archive step. | Identical rule at `rust/src/pane_clipboard.rs:75`. | The three `store.manager.osc52-remote-*` cases run with the native writer failing: the copy exits 0, `C` still writes its archive and clears the active list, and both runtimes emit the same sequence. |
+| Neither destination | Only a copy that reached neither the clipboard nor the terminal fails, carrying the unchanged native error. | Same. | Paired unit specs; unreachable from a pane whose stdout is a live terminal. |
 | Oversized payloads | `exceedsCommonOsc52Limit` at `src/pane-clipboard.ts:26`. | `exceeds_common_osc52_limit` at `rust/src/pane_clipboard.rs:47`. | Terminals commonly refuse a base64 payload over 74994 bytes. Both runtimes emit the full sequence anyway and never truncate a copy; the predicate exists so the limit is stated rather than silently applied. |
 
-Replacing one runtime's emitter with a no-op and rerunning the harness fails six cases
-(`screen.manager.all-views`, the three `*-success` sessions, `store.manager.copy-archive`, and
-`store.manager.osc52-remote-copy`), so these comparisons are not vacuously green.
+Replacing one runtime's emitter with a no-op and rerunning the harness fails every manager copy
+case, so these comparisons are not vacuously green.
+
+Because a pane's stdout is a live terminal, a manager copy no longer fails there. `No supported
+clipboard writer is available` therefore remains reachable from the global actions, which have no
+terminal, but not from the manager; the manager's copy-failure frames were removed from
+`screen.manager.all-views` for that reason.
 
 Readers return the first exit-0 stdout, decoded with UTF-8 replacement. Writers pipe the exact UTF-8
 Markdown to stdin and accept the first exit-0 adapter. Child stdout/stderr is suppressed. The fake
@@ -251,7 +256,7 @@ branches. Windows arguments are source-mapped and build-checked, not run by this
 | Editor/manager initialization error | 1 with stderr, no action-level notification |
 | Editor Esc/Ctrl+C, manager Esc/q/Ctrl+C, editor SIGTERM, manager SIGHUP | 0 after terminal restoration |
 | Successful editor save | 0 after final `Saved.` frame and 250 ms delay |
-| Manager copy/copy+archive success | 0 after clipboard/store completion; failure remains in the TUI until a later exit key |
+| Manager copy/copy+archive success | 0 after clipboard/store completion; a pane copy succeeds whenever the clipboard write or the OSC 52 emission lands |
 
 ## Error and failure strings
 
@@ -276,7 +281,6 @@ the prefix exactly as shown.
 | `Annotations are busy; try again.` / `Archives are busy; try again.` | `src/store.ts:224`/`:235` | `rust/src/store.rs:314`/`:324` | Active busy-lock differential plus paired per-store tests. |
 | `Unable to update annotations[ (<CODE>)]` / `Unable to update archives[ (<CODE>)]` | prefixes supplied at `src/store.ts:135`/`:147` | `rust/src/store.rs:202`/`:223` | Static catalog and rewrite failure unit paths. |
 | `Nothing to copy.` | `src/manager-copy.ts:18` | `rust/src/manager_copy.rs:20` | `screen.manager.empty-actions`. |
-| `Copied to this terminal. Server clipboard: <clipboard error>` | `src/pane-clipboard.ts:42` | `rust/src/pane_clipboard.rs:71` | `store.manager.osc52-remote-copy` and `screen.manager.all-views` failure frames, plus paired unit specs. |
 | `Nothing to copy and archive.` | `src/archive-workflow.ts:35` | `rust/src/archive_workflow.rs:44` | `screen.manager.empty-actions`. |
 | `No archive selected.` | `src/manager.ts:274`/`:351` | `rust/src/manager.rs:505`/`:609` | `screen.manager.empty-actions`. |
 | `Copied and archived, but active annotations remain: <store error>` | `src/manager.ts:239`, `src/export-archive.ts:35` | `rust/src/manager.rs:570`, `rust/src/cli.rs:167` | Paired workflow partial-failure tests plus static catalog. |
@@ -311,11 +315,11 @@ Notable differential groups:
 - `process.manage.*`, `process.editor.*`, `process.manager.*`: argv/error fallback and initialization.
 - `screen.editor.*`: both pending sources, every requested edit key, save branches, cancel keys, and SIGTERM.
 - `screen.manager.*`: both views, every view-valid key, ignored cross-view keys by handler mapping,
-  both confirmation flows, empty actions, copy failure, exit keys, and SIGHUP.
-- `store.manager.*`: successful clipboard-only and copy/archive products;
-  `store.manager.osc52-remote-copy` copies with the native writer failing, which is the remote-server
-  shape of issue #40; `store.cross-read` proves each implementation parses and exports the other's
-  editor-written record.
+  both confirmation flows, empty actions, exit keys, and SIGHUP.
+- `store.manager.*`: successful clipboard-only and copy/archive products; the three
+  `store.manager.osc52-remote-*` cases copy with the native writer failing, which is the
+  remote-server shape of issue #40; `store.cross-read` proves each implementation parses and exports
+  the other's editor-written record.
 
 The harness itself asserts the requested key-coverage set before it can print green.
 

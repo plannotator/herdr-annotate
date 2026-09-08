@@ -146,8 +146,9 @@ herdr server reload-config
 | `Ctrl+B M` | manage · `y` copy one · `c` copy all · `Shift+C` copy and archive · `Tab` archives (`y` copy · `u` restore · `d d` delete) |
 
 Copies made inside the manager pane also emit OSC 52, so on Herdr 0.9.0 they reach the clipboard of
-the machine you are viewing from even when the plugin runs on a remote server; `Ctrl+B Shift+A` and
-`Ctrl+B Ctrl+A` do not, because those actions run outside a pane and have no terminal to write to.
+the machine you are viewing from even when the plugin runs on a remote server with no clipboard tool
+installed; `Ctrl+B Shift+A` and `Ctrl+B Ctrl+A` do not, because those actions run outside a pane and
+have no terminal to write to.
 
 ### Review documents and agent replies
 

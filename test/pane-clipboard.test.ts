@@ -44,24 +44,39 @@ describe("pane clipboard writer", () => {
         order.push(`native:${text}`);
         return { ok: true, value: undefined };
       },
-      (sequence) => order.push(`emit:${sequence}`),
+      (sequence) => {
+        order.push(`emit:${sequence}`);
+        return true;
+      },
     );
 
     expect(write("hi")).toEqual({ ok: true, value: undefined });
     expect(order).toEqual(["native:hi", "emit:\x1b]52;c;aGk=\x07"]);
   });
 
-  test("still emits and reports the terminal copy when the native write fails", () => {
+  test("a copy the terminal received succeeds even when the native write failed", () => {
     const emitted: string[] = [];
     const write = paneClipboardWriter(
       () => ({ ok: false, message: "No supported clipboard writer is available" }),
-      (sequence) => emitted.push(sequence),
+      (sequence) => {
+        emitted.push(sequence);
+        return true;
+      },
+    );
+
+    expect(write("hi")).toEqual({ ok: true, value: undefined });
+    expect(emitted).toEqual(["\x1b]52;c;aGk=\x07"]);
+  });
+
+  test("a copy that reached neither destination fails with the native error", () => {
+    const write = paneClipboardWriter(
+      () => ({ ok: false, message: "No supported clipboard writer is available" }),
+      () => false,
     );
 
     expect(write("hi")).toEqual({
       ok: false,
-      message: "Copied to this terminal. Server clipboard: No supported clipboard writer is available",
+      message: "No supported clipboard writer is available",
     });
-    expect(emitted).toEqual(["\x1b]52;c;aGk=\x07"]);
   });
 });

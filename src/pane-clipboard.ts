@@ -25,20 +25,35 @@ export function exceedsCommonOsc52Limit(text: string): boolean {
 }
 
 /**
+ * Write the sequence to the pane's terminal, reporting whether it was written.
+ *
+ * Best effort: a closed or broken stdout must not throw out of a copy.
+ */
+export function emitToTerminal(sequence: string): boolean {
+  try {
+    process.stdout.write(sequence);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Wrap a native clipboard writer so every pane copy also reaches the viewing client's terminal.
  *
- * The native write is attempted first and the sequence is emitted afterwards, so a server without a
- * clipboard writer still delivers the copy. When only the sequence lands the result reports the copy
- * that succeeded and keeps the native failure visible instead of hiding it behind a bare success.
+ * The native write is attempted first and the sequence is emitted afterwards. Either one landing is
+ * a successful copy: a remote server commonly has no clipboard tool at all, and the sequence is the
+ * copy that actually reached the person, so it must not be reported as a failure or block the rest
+ * of a copy-and-archive. Only a copy that reached neither destination fails, with the native error.
  */
 export function paneClipboardWriter(
   writeClipboard: (text: string) => ClipboardResult<undefined>,
-  emit: (sequence: string) => void,
+  emit: (sequence: string) => boolean,
 ): (text: string) => ClipboardResult<undefined> {
   return (text: string) => {
     const native = writeClipboard(text);
-    emit(osc52ClipboardSequence(text));
-    if (native.ok) return native;
-    return { ok: false, message: `Copied to this terminal. Server clipboard: ${native.message}` };
+    const emitted = emit(osc52ClipboardSequence(text));
+    if (native.ok || emitted) return { ok: true, value: undefined };
+    return native;
   };
 }

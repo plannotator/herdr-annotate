@@ -45,8 +45,9 @@ separately so test coverage is not confused with behavior observed inside Herdr.
 - [x] `handoff.ts`: per-user runtime/temp path, 15-second freshness, read-once removal, blank rejection.
 - [x] `clipboard.ts`: `pbpaste`/`pbcopy`; PowerShell raw get/set; Linux Wayland then xclip then xsel.
 - [x] `pane-clipboard.ts`: identical `ESC ] 52 ; c ; <base64> BEL` bytes over the raw UTF-8 text,
-  emitted after the native write at the same two manager call sites, the same composed status when
-  only the terminal copy lands, and the same advisory 74994-byte payload limit with no truncation.
+  emitted after the native write at the same two manager call sites, the same rule that either
+  destination landing is a successful copy, and the same advisory 74994-byte payload limit with no
+  truncation.
 - [x] `herdr.ts`: `HERDR_BIN_PATH` override, stderr projection, best-effort notifications.
 - [x] `archive-workflow.ts` and `manager-copy.ts`: operation order and partial-failure states, including
   preserving a concurrently saved annotation.
@@ -68,7 +69,7 @@ document-anchor/API wire shape, not Lite's existing terminal-selection JSONL sha
 | `test/archive-workflow.test.ts` | `archive_workflow::tests` (8 tests) |
 | `test/export-archive.test.ts` | `cli::tests::copy_archive_maps_every_outcome_to_its_notification_and_exit_status` |
 | `test/manager-copy.test.ts` | `manager_copy::tests` (3 tests) |
-| `test/pane-clipboard.test.ts` | `pane_clipboard::tests` (7 tests, including base64 chunk padding) |
+| `test/pane-clipboard.test.ts` | `pane_clipboard::tests` (8 tests, including base64 chunk padding) |
 
 Additional Rust-only coverage:
 

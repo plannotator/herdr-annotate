@@ -6,7 +6,7 @@ import { writeClipboard } from "./clipboard";
 import { sanitizeTerminalText, wrapText } from "./format";
 import { stringWidth, truncateToWidth } from "./width";
 import { copyAnnotations } from "./manager-copy";
-import { paneClipboardWriter } from "./pane-clipboard";
+import { emitToTerminal, paneClipboardWriter } from "./pane-clipboard";
 import { stateDir } from "./paths";
 import {
   appendArchivedSet,
@@ -38,7 +38,7 @@ function requireStateDir(): string {
 
 const dir = requireStateDir();
 const out = (value: string) => process.stdout.write(value);
-const writePaneClipboard = paneClipboardWriter(writeClipboard, out);
+const writePaneClipboard = paneClipboardWriter(writeClipboard, emitToTerminal);
 let annotations: Annotation[] = [];
 let archives: ArchivedAnnotationSet[] = [];
 let activeSelected = 0;
