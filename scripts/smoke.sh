@@ -35,12 +35,14 @@ tui_version() {
   local bin; bin="$(plugin_root)/bin/plannotator-tui.exe"
   [ -x "$bin" ] && "$bin" --version | awk '{print $2}' || echo none
 }
-tui_pin() { tr -d '[:space:]' < "$(plugin_root)/plannotator-tui.version" 2>/dev/null || echo none; }
+# An old commit, and the Lite plugin root, carry only one of the two pins.
+read_pin() { if [ -f "$1" ]; then tr -d '[:space:]' < "$1"; else echo none; fi; }
+tui_pin() { read_pin "$(plugin_root)/plannotator-tui.version"; }
 native_version() {
   local bin; bin="$(checkout_root)/bin/herdr-annotate.exe"
   [ -x "$bin" ] && "$bin" --version | awk '{print $2}' || echo none
 }
-native_pin() { tr -d '[:space:]' < "$(checkout_root)/herdr-annotate.version" 2>/dev/null || echo none; }
+native_pin() { read_pin "$(checkout_root)/herdr-annotate.version"; }
 pane_id() { herdr pane list | python3 -c "
 import json,sys
 panes=[p for p in json.load(sys.stdin)['result']['panes'] if p.get('label')==sys.argv[1]]
@@ -54,11 +56,13 @@ wait_pane() {
   done
   printf '%s' "$pane"
 }
-# The manage action runs the native binary, which opens the manager pane with --cwd set to the
-# plugin root: the whole path a bound key takes.
+# The manage action opens the manager as a popup, which `herdr pane list` does not report, so
+# open it as an overlay with the same --cwd the action passes: the plugin root, which is what
+# resolves the manifest's relative program for both variants.
 manager_renders() {
-  herdr plugin action invoke annotate.manage >/dev/null 2>&1 || true
   local pane result=FAIL
+  herdr plugin pane open --plugin annotate --entrypoint manager --placement overlay \
+    --cwd "$(plugin_root)" --focus >/dev/null 2>&1 || true
   pane="$(wait_pane Annotations)"
   if [ -n "$pane" ] && herdr pane wait-output "$pane" --match "Annotations (" --timeout 8000 >/dev/null 2>&1; then
     result=ok
