@@ -1,12 +1,12 @@
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
-$version = (Get-Content "herdr-annotate.version" -Raw).Trim()
+$version = ([string](Get-Content -LiteralPath "herdr-annotate.version" -Raw)).Trim()
 if (-not $version) { throw "herdr-annotate.version is empty" }
 New-Item -ItemType Directory -Force "bin" | Out-Null
 $destination = Join-Path "bin" "herdr-annotate.exe"
 $stamp = Join-Path "bin" "herdr-annotate.version"
-$installed = if (Test-Path $stamp) { (Get-Content $stamp -Raw).Trim() } else { "" }
+$installed = if (Test-Path -LiteralPath $stamp -PathType Leaf) { ([string](Get-Content -LiteralPath $stamp -Raw)).Trim() } else { "" }
 
 if ((Test-Path $destination) -and $installed -eq $version -and -not $env:HERDR_ANNOTATE_BIN) {
   Write-Output "herdr-annotate $version already installed"
@@ -17,9 +17,9 @@ if ($env:HERDR_ANNOTATE_BIN) {
   if (-not (Test-Path $env:HERDR_ANNOTATE_BIN -PathType Leaf)) {
     throw "HERDR_ANNOTATE_BIN is not a file: $env:HERDR_ANNOTATE_BIN"
   }
-  Copy-Item -Force $env:HERDR_ANNOTATE_BIN "$destination.tmp"
-  Move-Item -Force "$destination.tmp" $destination
-  Set-Content -NoNewline $stamp $version
+  Copy-Item -Force -LiteralPath $env:HERDR_ANNOTATE_BIN -Destination "$destination.tmp"
+  Move-Item -Force -LiteralPath "$destination.tmp" -Destination $destination
+  Set-Content -LiteralPath $stamp -NoNewline -Value $version
   Write-Output "installed herdr-annotate from $env:HERDR_ANNOTATE_BIN (local build, stamped $version)"
   exit 0
 }
@@ -43,8 +43,8 @@ try {
   $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $temporary $asset)).Hash.ToLowerInvariant()
   if ($actual -ne $expected) { throw "sha256 mismatch for ${asset}: expected $expected, got $actual" }
   Copy-Item -Force (Join-Path $temporary $asset) "$destination.tmp"
-  Move-Item -Force "$destination.tmp" $destination
-  Set-Content -NoNewline $stamp $version
+  Move-Item -Force -LiteralPath "$destination.tmp" -Destination $destination
+  Set-Content -LiteralPath $stamp -NoNewline -Value $version
   Write-Output "installed herdr-annotate $version ($target)"
 }
 finally {
