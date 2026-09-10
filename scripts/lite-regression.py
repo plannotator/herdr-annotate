@@ -128,6 +128,10 @@ class Step:
     data: bytes = b""
     coverage: tuple[str, ...] = ()
     process_signal: int | None = None
+    # The keystroke ends the process (a manager copy closes the pane). The screen is captured
+    # only after the exit has been observed and the output drained, so a slow runner cannot
+    # snapshot the frame before the terminal is restored.
+    exits: bool = False
 
 
 @dataclass
@@ -449,6 +453,15 @@ class PtySession:
     def send(self, data: bytes) -> None:
         os.write(self.master, data)
         self.drain()
+
+    def wait_exit(self, timeout: float = 5.0) -> None:
+        deadline = time.monotonic() + timeout
+        while self.process.poll() is None and time.monotonic() < deadline:
+            self.drain(quiet=0.05, maximum=0.25)
+        if self.process.poll() is None:
+            raise RuntimeError("PTY command did not exit after an exiting step")
+        # Everything the process wrote on its way out, up to EOF.
+        self.drain(quiet=0.1, maximum=1.0)
 
     def send_signal(self, process_signal: int) -> None:
         os.killpg(self.process.pid, process_signal)
@@ -826,6 +839,8 @@ class Harness:
             self.goldens.coverage.update(step.coverage)
             if step.process_signal is None:
                 session.send(step.data)
+                if step.exits:
+                    session.wait_exit()
             else:
                 session.send_signal(step.process_signal)
             screens.append((step.label, session.grid.snapshot()))
@@ -1574,13 +1589,13 @@ def run_screen_and_store_layer(harness: Harness) -> Path:
     )
 
     for key, steps in (
-        ("active-y-success", [Step("copy-one", b"y", ("manager:active:y",))]),
-        ("active-c-success", [Step("copy-all", b"c", ("manager:active:c",))]),
+        ("active-y-success", [Step("copy-one", b"y", ("manager:active:y",), exits=True)]),
+        ("active-c-success", [Step("copy-all", b"c", ("manager:active:c",), exits=True)]),
         (
             "archives-y-success",
             [
                 Step("to-archives", b"\t", ("manager:active:Tab",)),
-                Step("copy-archive", b"y", ("manager:archives:y",)),
+                Step("copy-archive", b"y", ("manager:archives:y",), exits=True),
             ],
         ),
     ):
@@ -1599,7 +1614,7 @@ def run_screen_and_store_layer(harness: Harness) -> Path:
     harness.pty_case(
         "store.manager.copy-archive",
         "manager",
-        [Step("copy-archive", b"C", ("manager:active:C",))],
+        [Step("copy-archive", b"C", ("manager:active:C",), exits=True)],
         "Annotations (",
         28,
         98,
@@ -1612,9 +1627,9 @@ def run_screen_and_store_layer(harness: Harness) -> Path:
     # issue #40: the native write fails, the OSC 52 sequence still reaches the viewing client, and the
     # copy is a success. `C` must therefore still archive and clear the active list.
     for key, steps in (
-        ("osc52-remote-copy", [Step("copy-one", b"y", ("manager:active:y",))]),
-        ("osc52-remote-copy-all", [Step("copy-all", b"c", ("manager:active:c",))]),
-        ("osc52-remote-copy-archive", [Step("copy-archive", b"C", ("manager:active:C",))]),
+        ("osc52-remote-copy", [Step("copy-one", b"y", ("manager:active:y",), exits=True)]),
+        ("osc52-remote-copy-all", [Step("copy-all", b"c", ("manager:active:c",), exits=True)]),
+        ("osc52-remote-copy-archive", [Step("copy-archive", b"C", ("manager:active:C",), exits=True)]),
     ):
         state = harness.pty_case(
             f"store.manager.{key}",
