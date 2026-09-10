@@ -61,7 +61,7 @@ try {
   $beforeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $destination).Hash
   $result = Invoke-Fetcher
   Assert-True ($result.ExitCode -eq 0) "idempotent run failed: $($result.Output)"
-  Assert-True ($result.Output -match "already installed") "idempotent run did not short-circuit"
+  Assert-True ($result.Output -match "already installed") "idempotent run did not short-circuit: $($result.Output)"
   Assert-True (
     (Get-FileHash -Algorithm SHA256 -LiteralPath $destination).Hash -ceq $beforeHash
   ) "idempotent run replaced the destination"
@@ -70,7 +70,7 @@ try {
   $env:HERDR_ANNOTATE_BIN = Join-Path $testRoot "missing explicit override.exe"
   $result = Invoke-Fetcher
   Assert-True ($result.ExitCode -ne 0) "missing explicit override exited successfully"
-  Assert-True ($result.Output -match "HERDR_ANNOTATE_BIN is not a file") "missing override error differs"
+  Assert-True ($result.Output -match "HERDR_ANNOTATE_BIN is not a file") "missing override error differs: $($result.Output)"
   Assert-True (
     (Get-FileHash -Algorithm SHA256 -LiteralPath $destination).Hash -ceq $beforeHash
   ) "missing override changed the destination"
@@ -79,7 +79,7 @@ try {
   Set-Content -LiteralPath (Join-Path $pluginRoot "herdr-annotate.version") -NoNewline -Value ""
   $result = Invoke-Fetcher
   Assert-True ($result.ExitCode -ne 0) "empty version pin exited successfully"
-  Assert-True ($result.Output -match "herdr-annotate.version is empty") "empty pin error differs"
+  Assert-True ($result.Output -match "herdr-annotate.version is empty") "empty pin error differs: $($result.Output)"
   Assert-True (
     (Get-FileHash -Algorithm SHA256 -LiteralPath $destination).Hash -ceq $beforeHash
   ) "empty pin changed the destination"

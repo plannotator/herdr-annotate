@@ -1,7 +1,9 @@
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
-$version = ([string](Get-Content -LiteralPath "herdr-annotate.version" -Raw)).Trim()
+$versionContents = Get-Content -LiteralPath "herdr-annotate.version" -Raw
+$version = if ($null -eq $versionContents) { "" } else { [string]$versionContents }
+$version = $version.Trim()
 if (-not $version) { throw "herdr-annotate.version is empty" }
 New-Item -ItemType Directory -Force "bin" | Out-Null
 $destination = Join-Path "bin" "herdr-annotate.exe"
