@@ -93,8 +93,8 @@ def check_top_level_windows(path: Path, manifest: dict[str, object]) -> None:
 def check_distributed(path: Path, version_path: Path) -> None:
     manifest = load(path)
     check_top_level_windows(path, manifest)
-    if version_path.read_text(encoding="utf-8").strip() != "0.7.0":
-        fail(version_path, "plannotator-tui.version is not 0.7.0")
+    if version_path.read_text(encoding="utf-8").strip() != "0.8.0":
+        fail(version_path, "plannotator-tui.version is not 0.8.0")
 
     build_entries = builds(path, manifest)
     if len(build_entries) != 1:
