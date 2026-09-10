@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Deterministic differential harness for Herdr Annotate Lite."""
+"""Deterministic golden regression harness for Herdr Annotate Lite.
+
+The goldens under scripts/lite-goldens were recorded from the retired Bun runtime, so a green
+run is the standing proof that the native runtime still behaves the way the Bun one did. The
+harness runs the native binary only; --record rewrites the goldens from the current run and is
+for deliberate behavior changes.
+"""
 
 from __future__ import annotations
 
@@ -43,7 +49,8 @@ ISO_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z")
 UUID_PATTERN = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
 )
-TYPESCRIPT_SCRIPTS = {
+# The Bun entrypoints the goldens were recorded from. Only --record --from-bun runs them.
+BUN_SCRIPTS = {
     "capture": "capture.ts",
     "copy-context": "export.ts",
     "copy-archive": "export-archive.ts",
@@ -51,10 +58,34 @@ TYPESCRIPT_SCRIPTS = {
     "editor": "editor.ts",
     "manager": "manager.ts",
 }
+ENTRYPOINTS = tuple(sorted(BUN_SCRIPTS))
 NATIVE_PROGRAM = "./bin/herdr-annotate.exe"
 PENDING_PATTERN = re.compile(r"pending-\d+-\d+\.json")
 TEMP_PATTERN = re.compile(r"\.(annotations|archives)-\d+-\d+\.tmp")
-DELIBERATE_DIVERGENCES = ("manager timestamp locale outside en-US",)
+HANDOFF_PATTERN = re.compile(r"herdr-annotate-\d+")
+DELIBERATE_DIFFERENCES = ("manager timestamp locale outside en-US",)
+
+# One clipboard operation walks its platform's candidate list until an adapter works. The
+# goldens record the role only, so they hold on every platform, and the chain itself is checked
+# against this table instead.
+CLIPBOARD_CANDIDATES = {
+    "darwin": {
+        "read": (("pbpaste", ()),),
+        "write": (("pbcopy", ()),),
+    },
+    "linux": {
+        "read": (
+            ("wl-paste", ("--no-newline",)),
+            ("xclip", ("-selection", "clipboard", "-out")),
+            ("xsel", ("--clipboard", "--output")),
+        ),
+        "write": (
+            ("wl-copy", ()),
+            ("xclip", ("-selection", "clipboard", "-in")),
+            ("xsel", ("--clipboard", "--input")),
+        ),
+    },
+}
 
 WIDE_RANGES = (
     (0x1100, 0x115F),
@@ -112,47 +143,110 @@ class PtyResult:
     osc52: list[str]
 
 
-class Proof:
-    def __init__(self, artifacts: Path) -> None:
+class Goldens:
+    """Every recorded expectation, and the checks the harness states in its own source."""
+
+    def __init__(self, directory: Path, artifacts: Path, *, record: bool) -> None:
+        self.directory = directory
         self.artifacts = artifacts
-        self.observables = 0
+        self.record = record
+        self.groups: dict[str, dict[str, list[str]]] = {}
+        self.seen: dict[str, set[str]] = {}
+        self.checked = 0
         self.screens = 0
         self.failures: list[str] = []
         self.coverage: set[str] = set()
 
     @staticmethod
-    def _display(value: object) -> list[str]:
+    def _render(value: object, *, screen: bool = False) -> list[str]:
+        if screen:
+            return ["".join(cell or "·" for cell in row) for row in value]
         if isinstance(value, bytes):
-            return value.decode("utf-8", "backslashreplace").splitlines(keepends=True)
-        if isinstance(value, tuple) and value and isinstance(value[0], tuple):
-            return ["".join(cell or "·" for cell in row).rstrip() + "\n" for row in value]
-        return (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").splitlines(
-            keepends=True
-        )
+            return value.decode("utf-8", "backslashreplace").split("\n")
+        if isinstance(value, str):
+            return value.split("\n")
+        return json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True).split("\n")
 
-    def compare(self, name: str, typescript: object, rust: object, *, screen: bool = False) -> None:
-        self.observables += 1
+    def _group(self, group: str) -> dict[str, list[str]]:
+        if group not in self.groups:
+            path = self.directory / f"{group}.json"
+            recorded: dict[str, list[str]] = {}
+            if not self.record and path.exists():
+                recorded = json.loads(path.read_text(encoding="utf-8"))
+            self.groups[group] = recorded
+            self.seen[group] = set()
+        return self.groups[group]
+
+    def check(self, group: str, name: str, value: object, *, screen: bool = False) -> None:
+        """Compare one observable with its recording."""
+        self.checked += 1
         if screen:
             self.screens += 1
-        if typescript == rust:
+        rendered = self._render(value, screen=screen)
+        recorded = self._group(group)
+        self.seen[group].add(name)
+        if self.record:
+            recorded[name] = rendered
             return
-        self.failures.append(name)
-        diff = "".join(
+        if name not in recorded:
+            self.fail(name, f"no golden is recorded in {group}.json\n")
+            return
+        if recorded[name] != rendered:
+            self.fail(name, self._diff(name, recorded[name], rendered, "golden", "actual"))
+
+    def equal(self, name: str, expected: object, actual: object) -> None:
+        """Check one expectation this harness states itself, which is never recorded."""
+        self.checked += 1
+        if expected == actual:
+            return
+        self.fail(
+            name,
+            self._diff(name, self._render(expected), self._render(actual), "expected", "actual"),
+        )
+
+    @staticmethod
+    def _diff(name: str, left: list[str], right: list[str], left_name: str, right_name: str) -> str:
+        return "".join(
             difflib.unified_diff(
-                self._display(typescript),
-                self._display(rust),
-                fromfile=f"{name}.typescript",
-                tofile=f"{name}.rust",
+                [f"{line}\n" for line in left],
+                [f"{line}\n" for line in right],
+                fromfile=f"{name}.{left_name}",
+                tofile=f"{name}.{right_name}",
             )
         )
-        target = self.artifacts / "divergences" / f"{safe_name(name)}.diff"
+
+    def fail(self, name: str, detail: str) -> None:
+        self.failures.append(name)
+        target = self.artifacts / "failures" / f"{safe_name(name)}.diff"
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(diff or f"TypeScript: {typescript!r}\nRust: {rust!r}\n", encoding="utf-8")
-        print(f"DIVERGENCE {name}\n{diff}", file=sys.stderr)
+        target.write_text(detail or f"{name} differs\n", encoding="utf-8")
+        print(f"FAILURE {name}\n{detail}", file=sys.stderr)
 
     def require_coverage(self, required: Iterable[str]) -> None:
-        missing = sorted(set(required) - self.coverage)
-        self.compare("screen.key-coverage", [], missing)
+        self.equal("screen.key-coverage", [], sorted(set(required) - self.coverage))
+
+    def finish(self) -> None:
+        """Write the recording, or report goldens this run never exercised."""
+        if self.record:
+            self.directory.mkdir(parents=True, exist_ok=True)
+            for group, entries in self.groups.items():
+                (self.directory / f"{group}.json").write_text(
+                    json.dumps(entries, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+            for path in sorted(self.directory.glob("*.json")):
+                if path.stem not in self.groups:
+                    path.unlink()
+            return
+        for group, entries in self.groups.items():
+            unused = sorted(set(entries) - self.seen[group])
+            if unused:
+                self.fail(f"{group}.unused-goldens", "\n".join(unused) + "\n")
+        unused_groups = sorted(
+            path.stem for path in self.directory.glob("*.json") if path.stem not in self.groups
+        )
+        if unused_groups:
+            self.fail("goldens.unused-groups", "\n".join(unused_groups) + "\n")
 
 
 class TerminalGrid:
@@ -487,6 +581,7 @@ def normalize_text(value: str, roots: Iterable[Path]) -> str:
         normalized = normalized.replace(root, "<ROOT>")
     normalized = PENDING_PATTERN.sub("pending-<TIME>-<PID>.json", normalized)
     normalized = TEMP_PATTERN.sub(r".\1-<PID>-<TIME>.tmp", normalized)
+    normalized = HANDOFF_PATTERN.sub("herdr-annotate-<UID>", normalized)
     normalized = UUID_PATTERN.sub("<UUID>", normalized)
 
     def timestamp(match: re.Match[str]) -> str:
@@ -503,10 +598,28 @@ def read_process_log(path: Path, roots: Iterable[Path]) -> bytes:
     if not path.exists():
         return b""
     entries = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    collapsed: list[dict[str, object]] = []
+    for entry in entries:
+        # A clipboard operation is one entry however long this platform's candidate chain is.
+        role = entry.get("command")
+        if (
+            collapsed
+            and isinstance(role, str)
+            and role.startswith("clipboard-")
+            and collapsed[-1].get("command") == role
+        ):
+            continue
+        collapsed.append(entry)
     raw = "\n".join(
-        json.dumps(entry, ensure_ascii=False, separators=(",", ":"), sort_keys=True) for entry in entries
+        json.dumps(entry, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        for entry in collapsed
     )
     return normalize_bytes((raw + ("\n" if raw else "")).encode("utf-8"), roots)
+
+
+def adapter_log(process_log: Path) -> Path:
+    """Where the fake clipboard tools record the adapter chain each operation walked."""
+    return process_log.with_suffix(".adapters.jsonl")
 
 
 def state_snapshot(path: Path, roots: Iterable[Path]) -> bytes:
@@ -535,25 +648,37 @@ def create_fakes(directory: Path) -> Path:
         """#!/usr/bin/env python3
 import json, os, pathlib, sys
 name = pathlib.Path(sys.argv[0]).name
-log = pathlib.Path(os.environ["PARITY_PROCESS_LOG"])
-log.parent.mkdir(parents=True, exist_ok=True)
-with log.open("a", encoding="utf-8") as output:
-    output.write(json.dumps({"command": name, "args": sys.argv[1:]}, ensure_ascii=False, separators=(",", ":")) + "\\n")
+
+
+def append(variable, record):
+    path = os.environ.get(variable)
+    if not path:
+        return
+    target = pathlib.Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("a", encoding="utf-8") as output:
+        output.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\\n")
+
+
 if name == "herdr-fake":
-    if os.environ.get("PARITY_HERDR_FAIL") == "1" and sys.argv[1:2] == ["plugin"]:
-        sys.stderr.write(os.environ.get("PARITY_HERDR_STDERR", "fake herdr failure") + "\\n")
+    append("LITE_PROCESS_LOG", {"command": name, "args": sys.argv[1:]})
+    if os.environ.get("LITE_HERDR_FAIL") == "1" and sys.argv[1:2] == ["plugin"]:
+        sys.stderr.write(os.environ.get("LITE_HERDR_STDERR", "fake herdr failure") + "\\n")
         raise SystemExit(7)
     raise SystemExit(0)
-reads = {"pbpaste", "wl-paste", "xclip-read", "xsel-read"}
-writes = {"pbcopy", "wl-copy", "xclip-write", "xsel-write"}
+reads = {"pbpaste", "wl-paste"}
 mode = "read" if name in reads or (name == "xclip" and "-out" in sys.argv) or (name == "xsel" and "--output" in sys.argv) else "write"
+# The process log keeps the role only, so it is identical on every platform; the adapter log keeps
+# the platform's real program and arguments for the chain check.
+append("LITE_PROCESS_LOG", {"command": "clipboard-" + mode, "args": []})
+append("LITE_ADAPTER_LOG", {"role": mode, "adapter": name, "args": sys.argv[1:]})
 data = sys.stdin.buffer.read() if mode == "write" else b""
-if mode == "write" and os.environ.get("PARITY_CLIPBOARD_OUTPUT"):
-    pathlib.Path(os.environ["PARITY_CLIPBOARD_OUTPUT"]).write_bytes(data)
-if os.environ.get("PARITY_CLIPBOARD_FAIL") in (mode, "all"):
+if mode == "write" and os.environ.get("LITE_CLIPBOARD_OUTPUT"):
+    pathlib.Path(os.environ["LITE_CLIPBOARD_OUTPUT"]).write_bytes(data)
+if os.environ.get("LITE_CLIPBOARD_FAIL") in (mode, "all"):
     raise SystemExit(9)
 if mode == "read":
-    source = os.environ.get("PARITY_CLIPBOARD_INPUT")
+    source = os.environ.get("LITE_CLIPBOARD_INPUT")
     if source:
         sys.stdout.buffer.write(pathlib.Path(source).read_bytes())
 raise SystemExit(0)
@@ -567,17 +692,29 @@ raise SystemExit(0)
 
 
 class Harness:
-    def __init__(self, root: Path, rust_binary: Path, workspace: Path, proof: Proof) -> None:
+    def __init__(
+        self,
+        root: Path,
+        binary: Path,
+        implementation: str,
+        workspace: Path,
+        goldens: Goldens,
+    ) -> None:
         self.root = root
-        self.rust_binary = rust_binary
+        self.binary = binary
+        self.implementation = implementation
         self.workspace = workspace
-        self.proof = proof
+        self.goldens = goldens
         self.fake_bin = create_fakes(workspace / "fake-bin")
+        self.chains: dict[str, set[tuple[tuple[str, tuple[str, ...]], ...]]] = {
+            "read": set(),
+            "write": set(),
+        }
 
-    def command(self, implementation: str, entrypoint: str) -> list[str]:
-        if implementation == "rust":
-            return [str(self.rust_binary), entrypoint]
-        return ["bun", str(self.root / "src" / TYPESCRIPT_SCRIPTS[entrypoint])]
+    def command(self, entrypoint: str) -> list[str]:
+        if self.implementation == "bun":
+            return ["bun", str(self.root / "src" / BUN_SCRIPTS[entrypoint])]
+        return [str(self.binary), entrypoint]
 
     def environment(
         self,
@@ -597,24 +734,25 @@ class Harness:
                 "HERDR_BIN_PATH": str(self.fake_bin / "herdr-fake"),
                 "HERDR_PLUGIN_CONTEXT_JSON": "{}",
                 "XDG_RUNTIME_DIR": str(runtime),
-                "PARITY_PROCESS_LOG": str(process_log),
-                "PARITY_CLIPBOARD_INPUT": str(clipboard_input),
-                "PARITY_CLIPBOARD_OUTPUT": str(clipboard_output),
+                "LITE_PROCESS_LOG": str(process_log),
+                "LITE_ADAPTER_LOG": str(adapter_log(process_log)),
+                "LITE_CLIPBOARD_INPUT": str(clipboard_input),
+                "LITE_CLIPBOARD_OUTPUT": str(clipboard_output),
                 "TZ": "UTC",
                 "LANG": "en_US.UTF-8",
                 "LC_ALL": "en_US.UTF-8",
                 "TERM": "xterm-256color",
             }
         )
-        for key in ("PARITY_CLIPBOARD_FAIL", "PARITY_HERDR_FAIL", "PARITY_HERDR_STDERR", "HERDR_ANNOTATE_PENDING"):
+        for key in ("LITE_CLIPBOARD_FAIL", "LITE_HERDR_FAIL", "LITE_HERDR_STDERR", "HERDR_ANNOTATE_PENDING"):
             env.pop(key, None)
         if extra:
             env.update(extra)
         return env
 
-    def run(self, implementation: str, entrypoint: str, env: Mapping[str, str]) -> CommandResult:
+    def run(self, entrypoint: str, env: Mapping[str, str]) -> CommandResult:
         result = subprocess.run(
-            self.command(implementation, entrypoint),
+            self.command(entrypoint),
             cwd=self.root,
             env=dict(env),
             stdout=subprocess.PIPE,
@@ -623,50 +761,63 @@ class Harness:
         )
         return CommandResult(result.returncode, result.stdout, result.stderr)
 
-    def process_pair(
+    def record_chains(self, log: Path) -> None:
+        """Keep every adapter chain a case walked, for the platform chain check."""
+        if not log.exists():
+            return
+        entries = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line]
+        chain: list[tuple[str, tuple[str, ...]]] = []
+        role = ""
+        for entry in entries:
+            if chain and entry["role"] != role:
+                self.chains[role].add(tuple(chain))
+                chain = []
+            role = entry["role"]
+            chain.append((entry["adapter"], tuple(entry["args"])))
+        if chain:
+            self.chains[role].add(tuple(chain))
+
+    def case_paths(self, name: str) -> tuple[Path, Path, Path, Path, Path]:
+        base = self.workspace / name
+        base.mkdir(parents=True)
+        runtime = base / "runtime"
+        runtime.mkdir()
+        clipboard_input = base / "clipboard-input"
+        clipboard_input.write_bytes(b"")
+        return (
+            base / "state",
+            runtime,
+            base / "process.jsonl",
+            clipboard_input,
+            base / "clipboard-output",
+        )
+
+    def process_case(
         self,
         name: str,
         entrypoint: str,
         setup: Callable[[str, Path, Path, Path, Path, Path], Mapping[str, str] | None],
         inspect: Callable[[str, Path, Path, Path, Path, Path], object] | None = None,
-    ) -> tuple[Path, Path]:
-        case = self.workspace / name
-        results: dict[str, tuple[CommandResult, Path, Path, Path, Path, Path]] = {}
-        for implementation in ("typescript", "rust"):
-            base = case / implementation
-            state = base / "state"
-            runtime = base / "runtime"
-            log = base / "process.jsonl"
-            clipboard_input = base / "clipboard-input"
-            clipboard_output = base / "clipboard-output"
-            base.mkdir(parents=True)
-            runtime.mkdir()
-            clipboard_input.write_bytes(b"")
-            extra = setup(implementation, state, runtime, log, clipboard_input, clipboard_output) or {}
-            env = self.environment(state, runtime, log, clipboard_input, clipboard_output, extra)
-            results[implementation] = (
-                self.run(implementation, entrypoint, env),
-                state,
-                runtime,
-                log,
-                clipboard_input,
-                clipboard_output,
-            )
-        ts, rs = results["typescript"], results["rust"]
-        roots = [ts[1], ts[2], rs[1], rs[2], self.workspace]
-        self.proof.compare(f"{name}.exit", ts[0].exit_code, rs[0].exit_code)
-        self.proof.compare(f"{name}.stdout", normalize_bytes(ts[0].stdout, roots), normalize_bytes(rs[0].stdout, roots))
-        self.proof.compare(f"{name}.stderr", normalize_bytes(ts[0].stderr, roots), normalize_bytes(rs[0].stderr, roots))
-        self.proof.compare(f"{name}.processes", read_process_log(ts[3], roots), read_process_log(rs[3], roots))
+    ) -> Path:
+        state, runtime, log, clipboard_input, clipboard_output = self.case_paths(name)
+        extra = setup(self.implementation, state, runtime, log, clipboard_input, clipboard_output) or {}
+        env = self.environment(state, runtime, log, clipboard_input, clipboard_output, extra)
+        result = self.run(entrypoint, env)
+        self.record_chains(adapter_log(log))
+        roots = [state, runtime, self.workspace, self.root]
+        self.goldens.check(name, f"{name}.exit", result.exit_code)
+        self.goldens.check(name, f"{name}.stdout", normalize_bytes(result.stdout, roots))
+        self.goldens.check(name, f"{name}.stderr", normalize_bytes(result.stderr, roots))
+        self.goldens.check(name, f"{name}.processes", read_process_log(log, roots))
         if inspect:
-            self.proof.compare(
+            self.goldens.check(
+                name,
                 f"{name}.artifact",
-                inspect("typescript", *ts[1:]),
-                inspect("rust", *rs[1:]),
+                inspect(self.implementation, state, runtime, log, clipboard_input, clipboard_output),
             )
-        return ts[1], rs[1]
+        return state
 
-    def pty_pair(
+    def pty_case(
         self,
         name: str,
         entrypoint: str,
@@ -675,76 +826,50 @@ class Harness:
         rows: int,
         cols: int,
         seed: Callable[[Path], None],
-        extra: Mapping[str, str]
-        | Callable[[str, Path], Mapping[str, str]]
-        | None = None,
+        extra: Mapping[str, str] | Callable[[str, Path], Mapping[str, str]] | None = None,
         compare_state: bool = False,
         compare_clipboard: bool = False,
-    ) -> tuple[Path, Path]:
-        case = self.workspace / name
-        results: dict[str, tuple[PtyResult, Path, Path, Path, Path]] = {}
-        for implementation in ("typescript", "rust"):
-            base = case / implementation
-            state = base / "state"
-            runtime = base / "runtime"
-            log = base / "process.jsonl"
-            clipboard_input = base / "clipboard-input"
-            clipboard_output = base / "clipboard-output"
-            base.mkdir(parents=True)
-            runtime.mkdir()
-            clipboard_input.write_bytes(b"clipboard selection")
-            seed(state)
-            case_extra = extra(implementation, state) if callable(extra) else extra
-            env = self.environment(
-                state, runtime, log, clipboard_input, clipboard_output, case_extra
-            )
-            session = PtySession(self.command(implementation, entrypoint), env, self.root, rows, cols)
-            session.wait_for(marker)
-            screens = [("initial", session.grid.snapshot())]
-            for step in steps:
-                self.proof.coverage.update(step.coverage)
-                if step.process_signal is None:
-                    session.send(step.data)
-                else:
-                    session.send_signal(step.process_signal)
-                screens.append((step.label, session.grid.snapshot()))
-            code = session.finish()
-            results[implementation] = (
-                PtyResult(screens, code, osc52_sequences(bytes(session.raw))),
-                state,
-                runtime,
-                log,
-                clipboard_output,
-            )
-        ts, rs = results["typescript"], results["rust"]
-        roots = [ts[1], ts[2], rs[1], rs[2], self.workspace]
-        self.proof.compare(f"{name}.exit", ts[0].exit_code, rs[0].exit_code)
-        self.proof.compare(f"{name}.screen-count", len(ts[0].screens), len(rs[0].screens))
-        for (ts_label, ts_screen), (rs_label, rs_screen) in zip(ts[0].screens, rs[0].screens):
-            self.proof.compare(f"{name}.screen.{ts_label}.label", ts_label, rs_label)
-            self.proof.compare(f"{name}.screen.{ts_label}", ts_screen, rs_screen, screen=True)
-        self.proof.compare(f"{name}.processes", read_process_log(ts[3], roots), read_process_log(rs[3], roots))
-        self.proof.compare(f"{name}.osc52", ts[0].osc52, rs[0].osc52)
+    ) -> Path:
+        state, runtime, log, clipboard_input, clipboard_output = self.case_paths(name)
+        clipboard_input.write_bytes(b"clipboard selection")
+        seed(state)
+        case_extra = extra(self.implementation, state) if callable(extra) else extra
+        env = self.environment(state, runtime, log, clipboard_input, clipboard_output, case_extra)
+        session = PtySession(self.command(entrypoint), env, self.root, rows, cols)
+        session.wait_for(marker)
+        screens = [("initial", session.grid.snapshot())]
+        for step in steps:
+            self.goldens.coverage.update(step.coverage)
+            if step.process_signal is None:
+                session.send(step.data)
+            else:
+                session.send_signal(step.process_signal)
+            screens.append((step.label, session.grid.snapshot()))
+        exit_code = session.finish()
+        osc52 = osc52_sequences(bytes(session.raw))
+        self.record_chains(adapter_log(log))
+        roots = [state, runtime, self.workspace, self.root]
+        self.goldens.check(name, f"{name}.exit", exit_code)
+        self.goldens.check(name, f"{name}.screen-count", len(screens))
+        for label, screen in screens:
+            self.goldens.check(name, f"{name}.screen.{label}", screen, screen=True)
+        self.goldens.check(name, f"{name}.processes", read_process_log(log, roots))
+        self.goldens.check(name, f"{name}.osc52", osc52)
         if compare_clipboard:
-            ts_clipboard = normalize_bytes(ts[4].read_bytes() if ts[4].exists() else b"", roots)
-            rs_clipboard = normalize_bytes(rs[4].read_bytes() if rs[4].exists() else b"", roots)
-            self.proof.compare(f"{name}.clipboard", ts_clipboard, rs_clipboard)
+            clipboard = normalize_bytes(
+                clipboard_output.read_bytes() if clipboard_output.exists() else b"", roots
+            )
+            self.goldens.check(name, f"{name}.clipboard", clipboard)
             # Every pane copy reaches the viewing client too: the payload the terminal received is
             # byte-for-byte the text the native writer was handed.
-            def readable(value: bytes) -> str:
-                return value.decode("utf-8", "backslashreplace")
-
-            self.proof.compare(
+            self.goldens.equal(
                 f"{name}.osc52-payload",
-                [readable(ts_clipboard), readable(rs_clipboard)],
-                [
-                    readable(normalize_bytes(osc52_payload(ts[0].osc52), roots)),
-                    readable(normalize_bytes(osc52_payload(rs[0].osc52), roots)),
-                ],
+                clipboard,
+                normalize_bytes(osc52_payload(osc52), roots),
             )
         if compare_state:
-            self.proof.compare(f"{name}.state", state_snapshot(ts[1], roots), state_snapshot(rs[1], roots))
-        return ts[1], rs[1]
+            self.goldens.check(name, f"{name}.state", state_snapshot(state, roots))
+        return state
 
 
 def pending_artifact(_implementation: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> object:
@@ -823,7 +948,7 @@ def run_process_layer(harness: Harness) -> None:
         source.write_text("lower-priority clipboard", encoding="utf-8")
         return {"HERDR_PLUGIN_CONTEXT_JSON": context}
 
-    harness.process_pair(
+    harness.process_case(
         "process.capture.context", "capture", capture_context, pending_and_runtime_artifact
     )
 
@@ -835,7 +960,7 @@ def run_process_layer(harness: Harness) -> None:
         handoff.write_text("handoff selection\n", encoding="utf-8")
         source.write_text("lower-priority clipboard", encoding="utf-8")
 
-    harness.process_pair(
+    harness.process_case(
         "process.capture.handoff", "capture", capture_handoff, pending_and_runtime_artifact
     )
 
@@ -851,7 +976,7 @@ def run_process_layer(harness: Harness) -> None:
         os.utime(handoff, (stale, stale))
         source.write_text("clipboard after stale handoff", encoding="utf-8")
 
-    harness.process_pair(
+    harness.process_case(
         "process.capture.stale-handoff",
         "capture",
         capture_stale_handoff,
@@ -868,7 +993,7 @@ def run_process_layer(harness: Harness) -> None:
         handoff.write_text(" \n\t", encoding="utf-8")
         source.write_text("clipboard after blank handoff", encoding="utf-8")
 
-    harness.process_pair(
+    harness.process_case(
         "process.capture.blank-handoff",
         "capture",
         capture_blank_handoff,
@@ -885,7 +1010,7 @@ def run_process_layer(harness: Harness) -> None:
         handoff.write_bytes(b"invalid-\xff-handoff")
         source.write_text("clipboard after invalid handoff", encoding="utf-8")
 
-    harness.process_pair(
+    harness.process_case(
         "process.capture.invalid-utf8-handoff",
         "capture",
         capture_invalid_utf8_handoff,
@@ -897,7 +1022,7 @@ def run_process_layer(harness: Harness) -> None:
         state.mkdir()
         source.write_bytes("clipboard 한 selection".encode("utf-8"))
 
-    harness.process_pair("process.capture.clipboard", "capture", capture_clipboard, pending_artifact)
+    harness.process_case("process.capture.clipboard", "capture", capture_clipboard, pending_artifact)
 
     def capture_invalid_context(
         _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
@@ -907,7 +1032,7 @@ def run_process_layer(harness: Harness) -> None:
         source.write_text("clipboard after invalid context", encoding="utf-8")
         return {"HERDR_PLUGIN_CONTEXT_JSON": "{broken"}
 
-    harness.process_pair(
+    harness.process_case(
         "process.capture.invalid-context", "capture", capture_invalid_context, pending_artifact
     )
 
@@ -916,25 +1041,25 @@ def run_process_layer(harness: Harness) -> None:
         state.mkdir()
         source.write_bytes(b" \n\t")
 
-    harness.process_pair("process.capture.empty", "capture", capture_empty, no_pending_artifact)
+    harness.process_case("process.capture.empty", "capture", capture_empty, no_pending_artifact)
 
     def capture_no_clipboard(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
         del runtime, log, source, sink
         state.mkdir()
-        return {"PARITY_CLIPBOARD_FAIL": "read"}
+        return {"LITE_CLIPBOARD_FAIL": "read"}
 
-    harness.process_pair("process.capture.no-clipboard", "capture", capture_no_clipboard, no_pending_artifact)
+    harness.process_case("process.capture.no-clipboard", "capture", capture_no_clipboard, no_pending_artifact)
 
     def capture_open_failure(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
         del runtime, log, source, sink
         state.mkdir()
         return {
             "HERDR_PLUGIN_CONTEXT_JSON": context,
-            "PARITY_HERDR_FAIL": "1",
-            "PARITY_HERDR_STDERR": "pane open failed",
+            "LITE_HERDR_FAIL": "1",
+            "LITE_HERDR_STDERR": "pane open failed",
         }
 
-    harness.process_pair("process.capture.open-failure", "capture", capture_open_failure, no_pending_artifact)
+    harness.process_case("process.capture.open-failure", "capture", capture_open_failure, no_pending_artifact)
 
     def capture_missing_state(
         _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
@@ -942,7 +1067,7 @@ def run_process_layer(harness: Harness) -> None:
         del state, runtime, log, source, sink
         return {"HERDR_PLUGIN_STATE_DIR": "", "HERDR_PLUGIN_CONTEXT_JSON": context}
 
-    harness.process_pair("process.capture.missing-state", "capture", capture_missing_state)
+    harness.process_case("process.capture.missing-state", "capture", capture_missing_state)
 
     def capture_missing_root(
         _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
@@ -951,12 +1076,12 @@ def run_process_layer(harness: Harness) -> None:
         state.mkdir()
         return {"HERDR_PLUGIN_ROOT": "", "HERDR_PLUGIN_CONTEXT_JSON": context}
 
-    harness.process_pair("process.capture.missing-root", "capture", capture_missing_root)
+    harness.process_case("process.capture.missing-root", "capture", capture_missing_root)
 
     def copy_empty(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del state, runtime, log, source, sink
 
-    harness.process_pair(
+    harness.process_case(
         "process.copy.empty",
         "copy-context",
         copy_empty,
@@ -967,27 +1092,27 @@ def run_process_layer(harness: Harness) -> None:
         del runtime, log, source, sink
         seed_stores(state, archives=[])
 
-    harness.process_pair("process.copy.populated", "copy-context", copy_populated, clipboard_artifact)
+    harness.process_case("process.copy.populated", "copy-context", copy_populated, clipboard_artifact)
 
     def copy_single(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del runtime, log, source, sink
         seed_stores(state, annotations=ANNOTATIONS[:1], archives=[])
 
-    harness.process_pair("process.copy.single", "copy-context", copy_single, clipboard_artifact)
+    harness.process_case("process.copy.single", "copy-context", copy_single, clipboard_artifact)
 
     def copy_no_clipboard(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
         del runtime, log, source, sink
         seed_stores(state, archives=[])
-        return {"PARITY_CLIPBOARD_FAIL": "write"}
+        return {"LITE_CLIPBOARD_FAIL": "write"}
 
-    harness.process_pair("process.copy.no-clipboard", "copy-context", copy_no_clipboard, clipboard_artifact)
+    harness.process_case("process.copy.no-clipboard", "copy-context", copy_no_clipboard, clipboard_artifact)
 
     def copy_invalid(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del runtime, log, source, sink
         state.mkdir()
         (state / "annotations.jsonl").write_text("{broken\n", encoding="utf-8")
 
-    harness.process_pair("process.copy.invalid-store", "copy-context", copy_invalid)
+    harness.process_case("process.copy.invalid-store", "copy-context", copy_invalid)
 
     def copy_missing_state(
         _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
@@ -995,14 +1120,14 @@ def run_process_layer(harness: Harness) -> None:
         del state, runtime, log, source, sink
         return {"HERDR_PLUGIN_STATE_DIR": ""}
 
-    harness.process_pair("process.copy.missing-state", "copy-context", copy_missing_state)
+    harness.process_case("process.copy.missing-state", "copy-context", copy_missing_state)
 
     def fresh_lock(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del runtime, log, source, sink
         state.mkdir()
         (state / ".annotations.lock").mkdir()
 
-    harness.process_pair(
+    harness.process_case(
         "process.copy.busy-lock",
         "copy-context",
         fresh_lock,
@@ -1014,7 +1139,7 @@ def run_process_layer(harness: Harness) -> None:
         stale = time.time() - 31
         os.utime(state / ".annotations.lock", (stale, stale))
 
-    harness.process_pair(
+    harness.process_case(
         "process.copy.stale-lock",
         "copy-context",
         stale_lock,
@@ -1024,7 +1149,7 @@ def run_process_layer(harness: Harness) -> None:
     def copy_archive_empty(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del state, runtime, log, source, sink
 
-    harness.process_pair(
+    harness.process_case(
         "process.copy-archive.empty",
         "copy-archive",
         copy_archive_empty,
@@ -1035,7 +1160,7 @@ def run_process_layer(harness: Harness) -> None:
         del runtime, log, source, sink
         seed_stores(state)
 
-    harness.process_pair(
+    harness.process_case(
         "process.copy-archive.populated",
         "copy-archive",
         copy_archive_populated,
@@ -1047,9 +1172,9 @@ def run_process_layer(harness: Harness) -> None:
     ) -> Mapping[str, str]:
         del runtime, log, source, sink
         seed_stores(state)
-        return {"PARITY_CLIPBOARD_FAIL": "write"}
+        return {"LITE_CLIPBOARD_FAIL": "write"}
 
-    harness.process_pair(
+    harness.process_case(
         "process.copy-archive.no-clipboard",
         "copy-archive",
         copy_archive_no_clipboard,
@@ -1062,26 +1187,26 @@ def run_process_layer(harness: Harness) -> None:
         del state, runtime, log, source, sink
         return {"HERDR_PLUGIN_STATE_DIR": ""}
 
-    harness.process_pair("process.copy-archive.missing-state", "copy-archive", copy_archive_missing_state)
+    harness.process_case("process.copy-archive.missing-state", "copy-archive", copy_archive_missing_state)
 
     def manage_success(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del state, runtime, log, source, sink
 
-    harness.process_pair("process.manage.success", "manage", manage_success)
+    harness.process_case("process.manage.success", "manage", manage_success)
 
     def manage_failure(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
         del state, runtime, log, source, sink
-        return {"PARITY_HERDR_FAIL": "1", "PARITY_HERDR_STDERR": "manager open failed"}
+        return {"LITE_HERDR_FAIL": "1", "LITE_HERDR_STDERR": "manager open failed"}
 
-    harness.process_pair("process.manage.failure", "manage", manage_failure)
+    harness.process_case("process.manage.failure", "manage", manage_failure)
 
     def manage_failure_without_stderr(
         _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
     ) -> Mapping[str, str]:
         del state, runtime, log, source, sink
-        return {"PARITY_HERDR_FAIL": "1", "PARITY_HERDR_STDERR": ""}
+        return {"LITE_HERDR_FAIL": "1", "LITE_HERDR_STDERR": ""}
 
-    harness.process_pair(
+    harness.process_case(
         "process.manage.failure-without-stderr", "manage", manage_failure_without_stderr
     )
 
@@ -1091,13 +1216,13 @@ def run_process_layer(harness: Harness) -> None:
         del state, runtime, log, source, sink
         return {"HERDR_PLUGIN_ROOT": ""}
 
-    harness.process_pair("process.manage.missing-root", "manage", manage_missing_root)
+    harness.process_case("process.manage.missing-root", "manage", manage_missing_root)
 
     def editor_missing(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del runtime, log, source, sink
         state.mkdir()
 
-    harness.process_pair("process.editor.missing-pending", "editor", editor_missing)
+    harness.process_case("process.editor.missing-pending", "editor", editor_missing)
 
     def editor_invalid(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
         del runtime, log, source, sink
@@ -1106,13 +1231,13 @@ def run_process_layer(harness: Harness) -> None:
         pending.write_text('{"selectedText":"only"}\n', encoding="utf-8")
         return {"HERDR_ANNOTATE_PENDING": str(pending)}
 
-    harness.process_pair("process.editor.invalid-pending", "editor", editor_invalid)
+    harness.process_case("process.editor.invalid-pending", "editor", editor_invalid)
 
     def manager_missing(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
         del state, runtime, log, source, sink
         return {"HERDR_PLUGIN_STATE_DIR": ""}
 
-    harness.process_pair("process.manager.missing-state", "manager", manager_missing)
+    harness.process_case("process.manager.missing-state", "manager", manager_missing)
 
 
 EDITOR_REQUIRED = {
@@ -1179,7 +1304,7 @@ def pending_file_extra(_implementation: str, state: Path) -> Mapping[str, str]:
     return {"HERDR_ANNOTATE_PENDING": str(pending)}
 
 
-def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
+def run_screen_and_store_layer(harness: Harness) -> Path:
     editor_context = {
         "HERDR_PLUGIN_CONTEXT_JSON": json.dumps(
             {
@@ -1205,7 +1330,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         Step("down", b"\x1b[B", ("editor:down",)),
         Step("save", b"\x13", ("editor:ctrl-s",)),
     ]
-    editor_ts, editor_rs = harness.pty_pair(
+    editor_state = harness.pty_case(
         "screen.editor.edit-save",
         "editor",
         editor_steps,
@@ -1256,7 +1381,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         Step("mark-c", b"C"),
         Step("save", b"\x13", ("editor:ctrl-s",)),
     ]
-    harness.pty_pair(
+    harness.pty_case(
         "screen.editor.word-line-moves",
         "editor",
         move_steps,
@@ -1288,7 +1413,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         Step("mark-tail", b"tail ", ("editor:chars",)),
         Step("save", b"\x13", ("editor:ctrl-s",)),
     ]
-    harness.pty_pair(
+    harness.pty_case(
         "screen.editor.word-line-kills",
         "editor",
         kill_steps,
@@ -1299,7 +1424,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         editor_context,
         compare_state=True,
     )
-    harness.pty_pair(
+    harness.pty_case(
         "screen.editor.pending-file-save",
         "editor",
         [Step("chars", b"pending comment"), Step("save", b"\x13")],
@@ -1310,7 +1435,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         pending_file_extra,
         compare_state=True,
     )
-    harness.pty_pair(
+    harness.pty_case(
         "screen.editor.empty-save-escape",
         "editor",
         [
@@ -1323,7 +1448,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         editor_seed,
         editor_context,
     )
-    harness.pty_pair(
+    harness.pty_case(
         "screen.editor.control-c",
         "editor",
         [Step("control-c", b"\x03", ("editor:ctrl-c",))],
@@ -1333,7 +1458,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         editor_seed,
         editor_context,
     )
-    harness.pty_pair(
+    harness.pty_case(
         "screen.editor.missing-state",
         "editor",
         [Step("char", b"x"), Step("save", b"\x13"), Step("escape", b"\x1b")],
@@ -1343,7 +1468,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         editor_seed,
         {**editor_context, "HERDR_PLUGIN_STATE_DIR": ""},
     )
-    harness.pty_pair(
+    harness.pty_case(
         "screen.editor.sigterm",
         "editor",
         [Step("sigterm", process_signal=signal.SIGTERM)],
@@ -1383,7 +1508,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         Step("archives-to-active", b"\t", ("manager:archives:Tab",)),
         Step("active-quit", b"q", ("manager:active:q",)),
     ]
-    harness.pty_pair(
+    harness.pty_case(
         "screen.manager.all-views",
         "manager",
         manager_steps,
@@ -1394,7 +1519,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         compare_state=True,
         compare_clipboard=True,
     )
-    harness.pty_pair(
+    harness.pty_case(
         "screen.manager.escape-exit",
         "manager",
         [
@@ -1406,7 +1531,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         98,
         manager_seed,
     )
-    harness.pty_pair(
+    harness.pty_case(
         "screen.manager.escape-active",
         "manager",
         [Step("active-escape", b"\x1b", ("manager:active:Esc",))],
@@ -1415,7 +1540,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         98,
         manager_seed,
     )
-    harness.pty_pair(
+    harness.pty_case(
         "screen.manager.control-c-active",
         "manager",
         [Step("control-c", b"\x03", ("manager:active:Ctrl-C",))],
@@ -1424,7 +1549,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         98,
         manager_seed,
     )
-    harness.pty_pair(
+    harness.pty_case(
         "screen.manager.control-c-archives",
         "manager",
         [
@@ -1436,7 +1561,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         98,
         manager_seed,
     )
-    harness.pty_pair(
+    harness.pty_case(
         "screen.manager.q-archives",
         "manager",
         [
@@ -1448,7 +1573,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         98,
         manager_seed,
     )
-    harness.pty_pair(
+    harness.pty_case(
         "screen.manager.sighup",
         "manager",
         [Step("sighup", process_signal=signal.SIGHUP)],
@@ -1457,7 +1582,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         98,
         manager_seed,
     )
-    harness.pty_pair(
+    harness.pty_case(
         "screen.manager.empty-actions",
         "manager",
         [
@@ -1489,7 +1614,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
             ],
         ),
     ):
-        harness.pty_pair(
+        harness.pty_case(
             f"store.manager.{key}",
             "manager",
             steps,
@@ -1501,7 +1626,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
             compare_clipboard=True,
         )
 
-    harness.pty_pair(
+    harness.pty_case(
         "store.manager.copy-archive",
         "manager",
         [Step("copy-archive", b"C", ("manager:active:C",))],
@@ -1521,7 +1646,7 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
         ("osc52-remote-copy-all", [Step("copy-all", b"c", ("manager:active:c",))]),
         ("osc52-remote-copy-archive", [Step("copy-archive", b"C", ("manager:active:C",))]),
     ):
-        states = harness.pty_pair(
+        state = harness.pty_case(
             f"store.manager.{key}",
             "manager",
             steps,
@@ -1529,99 +1654,124 @@ def run_screen_and_store_layer(harness: Harness) -> tuple[Path, Path]:
             28,
             98,
             manager_seed,
-            {"PARITY_CLIPBOARD_FAIL": "write"},
+            {"LITE_CLIPBOARD_FAIL": "write"},
             compare_state=True,
             compare_clipboard=True,
         )
         if key != "osc52-remote-copy-archive":
             continue
+
         # The copy succeeded on the OSC 52 path alone, so copy-and-archive must have gone on to
         # write its archive (a third, beside the two seeded) and clear the active list, rather than
         # stopping at the copy.
-        for implementation, state in zip(("typescript", "rust"), states):
-            def records(name: str, state: Path = state) -> int:
-                path = state / name
-                if not path.exists():
-                    return 0
-                return len([line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()])
+        def records(name: str, state: Path = state) -> int:
+            path = state / name
+            if not path.exists():
+                return 0
+            return len([line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()])
 
-            harness.proof.compare(
-                f"store.manager.{key}.archived.{implementation}",
-                {"archives": 3, "active": 0},
-                {"archives": records("archives.jsonl"), "active": records("annotations.jsonl")},
-            )
-
-    harness.proof.require_coverage(EDITOR_REQUIRED | MANAGER_REQUIRED)
-    return editor_ts, editor_rs
-
-
-def cross_read(harness: Harness, typescript_state: Path, rust_state: Path) -> None:
-    case = harness.workspace / "store.cross-read"
-    outputs: dict[str, tuple[CommandResult, bytes, bytes]] = {}
-    for name, implementation, state in (
-        ("typescript-reads-rust", "typescript", rust_state),
-        ("rust-reads-typescript", "rust", typescript_state),
-    ):
-        base = case / name
-        runtime = base / "runtime"
-        runtime.mkdir(parents=True)
-        log = base / "process.jsonl"
-        source = base / "clipboard-input"
-        source.write_bytes(b"")
-        sink = base / "clipboard-output"
-        env = harness.environment(state, runtime, log, source, sink)
-        result = harness.run(implementation, "copy-context", env)
-        outputs[name] = (result, sink.read_bytes() if sink.exists() else b"", read_process_log(log, [state, runtime]))
-    left = outputs["typescript-reads-rust"]
-    right = outputs["rust-reads-typescript"]
-    harness.proof.compare("store.cross-read.exit", left[0].exit_code, right[0].exit_code)
-    harness.proof.compare("store.cross-read.stderr", left[0].stderr, right[0].stderr)
-    harness.proof.compare("store.cross-read.markdown", left[1], right[1])
-    harness.proof.compare("store.cross-read.processes", left[2], right[2])
-
-
-def verify_error_catalog(root: Path, proof: Proof) -> None:
-    pairs = {
-        "HERDR_PLUGIN_STATE_DIR is not set": ("src/capture.ts", "rust/src/cli.rs"),
-        "HERDR_PLUGIN_ROOT is not set": ("src/capture.ts", "rust/src/cli.rs"),
-        "No supported clipboard reader is available": ("src/clipboard.ts", "rust/src/clipboard.rs"),
-        "No supported clipboard writer is available": ("src/clipboard.ts", "rust/src/clipboard.rs"),
-        "Missing pending annotation": ("src/editor.ts", "rust/src/editor.rs"),
-        "Pending annotation is invalid": ("src/editor.ts", "rust/src/editor.rs"),
-        "Write a comment before saving.": ("src/editor.ts", "rust/src/editor.rs"),
-        "Plugin state directory is unavailable.": ("src/editor.ts", "rust/src/editor.rs"),
-        "Nothing to copy.": ("src/manager-copy.ts", "rust/src/manager_copy.rs"),
-        "Nothing to copy and archive.": ("src/archive-workflow.ts", "rust/src/archive_workflow.rs"),
-        "No archive selected.": ("src/manager.ts", "rust/src/manager.rs"),
-        "Unable to save annotation": ("src/store.ts", "rust/src/store.rs"),
-        "Unable to update annotations": ("src/store.ts", "rust/src/store.rs"),
-        "Unable to update archives": ("src/store.ts", "rust/src/store.rs"),
-        "Unable to read": ("src/store.ts", "rust/src/store.rs"),
-        "Unable to access": ("src/store.ts", "rust/src/store.rs"),
-        "Unable to lock": ("src/store.ts", "rust/src/store.rs"),
-        "are busy; try again.": ("src/store.ts", "rust/src/store.rs"),
-        "Copied and archived, but active annotations remain:": (
-            "src/manager.ts",
-            "rust/src/manager.rs",
-        ),
-        "Annotations copied and archived": ("src/export-archive.ts", "rust/src/cli.rs"),
-        "Copy and archive failed": ("src/export-archive.ts", "rust/src/cli.rs"),
-        "Copy and archive incomplete": ("src/export-archive.ts", "rust/src/cli.rs"),
-        "copied as Markdown and archived.": ("src/export-archive.ts", "rust/src/cli.rs"),
-        "Annotations restored, but the archive remains:": (
-            "src/manager.ts",
-            "rust/src/manager.rs",
-        ),
-    }
-    for message, (typescript_file, rust_file) in pairs.items():
-        present = (
-            message in (root / typescript_file).read_text(encoding="utf-8"),
-            message in (root / rust_file).read_text(encoding="utf-8"),
+        harness.goldens.equal(
+            f"store.manager.{key}.archived",
+            {"archives": 3, "active": 0},
+            {"archives": records("archives.jsonl"), "active": records("annotations.jsonl")},
         )
-        proof.compare(
+
+    harness.goldens.require_coverage(EDITOR_REQUIRED | MANAGER_REQUIRED)
+    return editor_state
+
+
+def verify_cross_read(harness: Harness, editor_state: Path) -> None:
+    """The runtime still reads a store the retired Bun editor wrote.
+
+    The fixture beside the goldens is the exact `annotations.jsonl` the Bun editor produced in the
+    recorded `screen.editor.edit-save` run, so this stays a compatibility check after Bun is gone.
+    """
+    fixture = harness.goldens.directory / "fixtures" / "bun-editor-annotations.jsonl"
+    if harness.goldens.record:
+        fixture.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(editor_state / "annotations.jsonl", fixture)
+    state, runtime, log, clipboard_input, clipboard_output = harness.case_paths("store.cross-read")
+    state.mkdir(mode=0o700)
+    shutil.copyfile(fixture, state / "annotations.jsonl")
+    (state / "annotations.jsonl").chmod(0o600)
+    result = harness.run(
+        "copy-context",
+        harness.environment(state, runtime, log, clipboard_input, clipboard_output),
+    )
+    harness.record_chains(adapter_log(log))
+    roots = [state, runtime, harness.workspace, harness.root]
+    group = "store.cross-read"
+    harness.goldens.check(group, f"{group}.exit", result.exit_code)
+    harness.goldens.check(group, f"{group}.stderr", normalize_bytes(result.stderr, roots))
+    harness.goldens.check(
+        group,
+        f"{group}.markdown",
+        clipboard_output.read_bytes() if clipboard_output.exists() else b"",
+    )
+    harness.goldens.check(group, f"{group}.processes", read_process_log(log, roots))
+
+
+def verify_clipboard_chains(harness: Harness) -> None:
+    """The chains the run walked are this platform's candidate list, in order.
+
+    The goldens keep the clipboard role only so they hold on every platform. The adapter identity,
+    its arguments, and the fallback order are checked here instead, including that the run
+    exercised both a first-adapter success and the full chain.
+    """
+    candidates = CLIPBOARD_CANDIDATES["darwin" if sys.platform == "darwin" else "linux"]
+
+    def steps(chain: Sequence[tuple[str, Sequence[str]]]) -> list[list[object]]:
+        return [[adapter, list(arguments)] for adapter, arguments in chain]
+
+    for role, expected in candidates.items():
+        observed = sorted(harness.chains[role], key=len)
+        harness.goldens.equal(
+            f"clipboard.{role}.chains",
+            [steps(expected[: len(chain)]) for chain in observed],
+            [steps(chain) for chain in observed],
+        )
+        harness.goldens.equal(
+            f"clipboard.{role}.lengths",
+            sorted({1, len(expected)}),
+            sorted({len(chain) for chain in observed}),
+        )
+
+
+# Every user-visible message the retired Bun runtime produced, and the native file that owns it.
+ERROR_CATALOG = {
+    "HERDR_PLUGIN_STATE_DIR is not set": "rust/src/cli.rs",
+    "HERDR_PLUGIN_ROOT is not set": "rust/src/cli.rs",
+    "No supported clipboard reader is available": "rust/src/clipboard.rs",
+    "No supported clipboard writer is available": "rust/src/clipboard.rs",
+    "Missing pending annotation": "rust/src/editor.rs",
+    "Pending annotation is invalid": "rust/src/editor.rs",
+    "Write a comment before saving.": "rust/src/editor.rs",
+    "Plugin state directory is unavailable.": "rust/src/editor.rs",
+    "Nothing to copy.": "rust/src/manager_copy.rs",
+    "Nothing to copy and archive.": "rust/src/archive_workflow.rs",
+    "No archive selected.": "rust/src/manager.rs",
+    "Unable to save annotation": "rust/src/store.rs",
+    "Unable to update annotations": "rust/src/store.rs",
+    "Unable to update archives": "rust/src/store.rs",
+    "Unable to read": "rust/src/store.rs",
+    "Unable to access": "rust/src/store.rs",
+    "Unable to lock": "rust/src/store.rs",
+    "are busy; try again.": "rust/src/store.rs",
+    "Copied and archived, but active annotations remain:": "rust/src/manager.rs",
+    "Annotations copied and archived": "rust/src/cli.rs",
+    "Copy and archive failed": "rust/src/cli.rs",
+    "Copy and archive incomplete": "rust/src/cli.rs",
+    "copied as Markdown and archived.": "rust/src/cli.rs",
+    "Annotations restored, but the archive remains:": "rust/src/manager.rs",
+}
+
+
+def verify_error_catalog(root: Path, goldens: Goldens) -> None:
+    for message, source in ERROR_CATALOG.items():
+        goldens.equal(
             f"errors.catalog.{safe_name(message)}",
-            (True, True),
-            present,
+            True,
+            message in (root / source).read_text(encoding="utf-8"),
         )
 
 
@@ -1636,7 +1786,7 @@ def manifest_entries(manifest: Mapping[str, object], table: str) -> dict[str, di
     }
 
 
-def verify_manifests(root: Path, proof: Proof) -> None:
+def verify_manifests(root: Path, goldens: Goldens) -> None:
     """Both Lite manifests must declare the same entrypoints, and the harness must drive them all."""
 
     def load(path: Path) -> dict[str, object]:
@@ -1654,11 +1804,11 @@ def verify_manifests(root: Path, proof: Proof) -> None:
     full_actions = manifest_entries(full, "actions")
     full_panes = manifest_entries(full, "panes")
 
-    proof.compare("manifest.action-ids", sorted(lite_actions), sorted(native_actions))
-    proof.compare("manifest.pane-ids", sorted(lite_panes), sorted(native_panes))
-    proof.compare(
+    goldens.equal("manifest.action-ids", sorted(lite_actions), sorted(native_actions))
+    goldens.equal("manifest.pane-ids", sorted(lite_panes), sorted(native_panes))
+    goldens.equal(
         "manifest.harness-entrypoints",
-        sorted(TYPESCRIPT_SCRIPTS),
+        list(ENTRYPOINTS),
         sorted(set(lite_actions) | set(lite_panes)),
     )
 
@@ -1670,13 +1820,13 @@ def verify_manifests(root: Path, proof: Proof) -> None:
             native_entry = native_entries.get(identifier, {})
             full_entry = full_entries.get(identifier, {})
             for field in fields:
-                proof.compare(
+                goldens.equal(
                     f"manifest.{table}.{identifier}.{field}",
                     (entry.get(field), entry.get(field)),
                     (native_entry.get(field), full_entry.get(field)),
                 )
             lite_command = entry.get("command", [])
-            proof.compare(
+            goldens.equal(
                 f"manifest.{table}.{identifier}.command",
                 (
                     [NATIVE_PROGRAM, identifier],
@@ -1684,7 +1834,7 @@ def verify_manifests(root: Path, proof: Proof) -> None:
                 ),
                 (native_entry.get("command"), full_entry.get("command")),
             )
-            proof.compare(
+            goldens.equal(
                 f"manifest.{table}.{identifier}.platforms",
                 (None, None, None),
                 (entry.get("platforms"), native_entry.get("platforms"), full_entry.get("platforms")),
@@ -1692,43 +1842,74 @@ def verify_manifests(root: Path, proof: Proof) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Check Herdr Annotate Lite against its goldens.")
     parser.add_argument("--root", type=Path, required=True)
-    parser.add_argument("--rust-binary", type=Path, required=True)
-    return parser.parse_args()
+    parser.add_argument("--binary", type=Path, required=True)
+    parser.add_argument(
+        "--goldens",
+        type=Path,
+        default=None,
+        help="the recorded expectations (default: scripts/lite-goldens beside this file)",
+    )
+    parser.add_argument(
+        "--record",
+        action="store_true",
+        help="rewrite the goldens from this run, for a deliberate behavior change",
+    )
+    parser.add_argument(
+        "--from-bun",
+        action="store_true",
+        help="record from the retired Bun runtime instead of the native binary",
+    )
+    arguments = parser.parse_args()
+    if arguments.from_bun and not arguments.record:
+        parser.error("--from-bun only records; pass --record")
+    if arguments.goldens is None:
+        arguments.goldens = Path(__file__).resolve().parent / "lite-goldens"
+    return arguments
 
 
 def main() -> int:
     args = parse_args()
     os.umask(0o022)
-    workspace = Path(tempfile.mkdtemp(prefix="herdr-annotate-parity-"))
-    proof = Proof(workspace / "artifacts")
+    workspace = Path(tempfile.mkdtemp(prefix="herdr-annotate-lite-"))
+    goldens = Goldens(args.goldens.resolve(), workspace / "artifacts", record=args.record)
     try:
-        harness = Harness(args.root.resolve(), args.rust_binary.resolve(), workspace, proof)
-        print("== process layer")
+        harness = Harness(
+            args.root.resolve(),
+            args.binary.resolve(),
+            "bun" if args.from_bun else "native",
+            workspace,
+            goldens,
+        )
+        print(f"== process layer ({harness.implementation})")
         run_process_layer(harness)
         print("== screen and store layers")
-        typescript_state, rust_state = run_screen_and_store_layer(harness)
-        print("== cross-read, error catalog, and manifests")
-        cross_read(harness, typescript_state, rust_state)
-        verify_error_catalog(args.root.resolve(), proof)
-        verify_manifests(args.root.resolve(), proof)
-        if proof.failures:
+        editor_state = run_screen_and_store_layer(harness)
+        print("== cross-read, clipboard chains, error catalog, and manifests")
+        verify_cross_read(harness, editor_state)
+        verify_clipboard_chains(harness)
+        verify_error_catalog(args.root.resolve(), goldens)
+        verify_manifests(args.root.resolve(), goldens)
+        goldens.finish()
+        summary = (
+            f"Lite regression: {goldens.checked} observables, {goldens.screens} screens, "
+            f"{len(DELIBERATE_DIFFERENCES)} deliberate difference"
+        )
+        if goldens.failures:
             print(
-                f"Parity Lite: {proof.observables} observables compared, {proof.screens} screens diffed, "
-                f"{len(proof.failures)} divergences / "
-                f"{len(DELIBERATE_DIVERGENCES)} deliberate; artifacts: {workspace}",
+                f"{summary}, {len(goldens.failures)} failures; artifacts: {workspace}",
                 file=sys.stderr,
             )
             return 1
-        print(
-            f"Parity Lite: {proof.observables} observables compared, {proof.screens} screens diffed, "
-            f"zero divergences / {len(DELIBERATE_DIVERGENCES)} deliberate"
-        )
+        if args.record:
+            print(f"{summary}, recorded into {goldens.directory}")
+        else:
+            print(f"{summary}, zero failures")
         shutil.rmtree(workspace)
         return 0
-    except Exception as error:  # noqa: BLE001 - harness must retain evidence on any failure.
-        print(f"parity-lite: {error}; artifacts: {workspace}", file=sys.stderr)
+    except Exception as error:  # noqa: BLE001 - the harness must retain evidence on any failure.
+        print(f"lite-regression: {error}; artifacts: {workspace}", file=sys.stderr)
         return 1
 
 

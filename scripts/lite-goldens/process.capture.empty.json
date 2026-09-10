@@ -1,0 +1,19 @@
+{
+  "process.capture.empty.artifact": [
+    "[]"
+  ],
+  "process.capture.empty.exit": [
+    "0"
+  ],
+  "process.capture.empty.processes": [
+    "{\"args\":[],\"command\":\"clipboard-read\"}",
+    "{\"args\":[\"notification\",\"show\",\"Nothing to annotate\",\"--body\",\"Select text in Herdr or copy text to the clipboard.\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.capture.empty.stderr": [
+    ""
+  ],
+  "process.capture.empty.stdout": [
+    ""
+  ]
+}

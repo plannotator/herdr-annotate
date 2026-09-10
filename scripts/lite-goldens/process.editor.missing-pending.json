@@ -1,0 +1,15 @@
+{
+  "process.editor.missing-pending.exit": [
+    "1"
+  ],
+  "process.editor.missing-pending.processes": [
+    ""
+  ],
+  "process.editor.missing-pending.stderr": [
+    "Missing pending annotation",
+    ""
+  ],
+  "process.editor.missing-pending.stdout": [
+    ""
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "process.capture.invalid-context.artifact": [
+    "{",
+    "  \"bytes\": \"{\\\"selectedText\\\":\\\"clipboard after invalid context\\\",\\\"context\\\":{},\\\"capturedAt\\\":\\\"<TIMESTAMP>\\\"}\\n\",",
+    "  \"mode\": \"0600\",",
+    "  \"name\": \"pending-<TIME>-<PID>.json\"",
+    "}"
+  ],
+  "process.capture.invalid-context.exit": [
+    "0"
+  ],
+  "process.capture.invalid-context.processes": [
+    "{\"args\":[],\"command\":\"clipboard-read\"}",
+    "{\"args\":[\"plugin\",\"pane\",\"open\",\"--cwd\",\"<ROOT>\",\"--plugin\",\"annotate\",\"--entrypoint\",\"editor\",\"--placement\",\"popup\",\"--width\",\"88\",\"--height\",\"24\",\"--env\",\"HERDR_ANNOTATE_PENDING=<ROOT>/pending-<TIME>-<PID>.json\",\"--focus\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.capture.invalid-context.stderr": [
+    ""
+  ],
+  "process.capture.invalid-context.stdout": [
+    ""
+  ]
+}

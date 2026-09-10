@@ -1,0 +1,15 @@
+{
+  "process.editor.invalid-pending.exit": [
+    "1"
+  ],
+  "process.editor.invalid-pending.processes": [
+    ""
+  ],
+  "process.editor.invalid-pending.stderr": [
+    "Pending annotation is invalid",
+    ""
+  ],
+  "process.editor.invalid-pending.stdout": [
+    ""
+  ]
+}

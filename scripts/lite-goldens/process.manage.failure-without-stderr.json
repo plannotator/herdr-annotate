@@ -1,0 +1,17 @@
+{
+  "process.manage.failure-without-stderr.exit": [
+    "1"
+  ],
+  "process.manage.failure-without-stderr.processes": [
+    "{\"args\":[\"plugin\",\"pane\",\"open\",\"--cwd\",\"<ROOT>\",\"--plugin\",\"annotate\",\"--entrypoint\",\"manager\",\"--placement\",\"popup\",\"--width\",\"100\",\"--height\",\"30\",\"--focus\"],\"command\":\"herdr-fake\"}",
+    "{\"args\":[\"notification\",\"show\",\"Unable to open annotations\",\"--body\",\"herdr plugin pane open --cwd <ROOT> --plugin annotate --entrypoint manager --placement popup --width 100 --height 30 --focus failed\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.manage.failure-without-stderr.stderr": [
+    "herdr plugin pane open --cwd <ROOT> --plugin annotate --entrypoint manager --placement popup --width 100 --height 30 --focus failed",
+    ""
+  ],
+  "process.manage.failure-without-stderr.stdout": [
+    ""
+  ]
+}

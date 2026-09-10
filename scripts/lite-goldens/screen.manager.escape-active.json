@@ -1,0 +1,74 @@
+{
+  "screen.manager.escape-active.exit": [
+    "0"
+  ],
+  "screen.manager.escape-active.osc52": [
+    "[]"
+  ],
+  "screen.manager.escape-active.processes": [
+    ""
+  ],
+  "screen.manager.escape-active.screen-count": [
+    "2"
+  ],
+  "screen.manager.escape-active.screen.active-escape": [
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  "
+  ],
+  "screen.manager.escape-active.screen.initial": [
+    " Annotations (3)  newest first                                                                    ",
+    " › third selection                 │ Selected text                                                ",
+    "   wide 한·글· selection and enough… │ third selection                                              ",
+    "   first selection with ``` ticks… │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │ Comment                                                      ",
+    "                                   │ third comment                                                ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │ api 한· / server · 8/10/2026, 8:21:23 PM                      ",
+    "                                   │                                                              ",
+    " j/k · y copy · c all · Shift+C copy+archive · d delete · Shift+D clear · Tab archives · q        "
+  ]
+}

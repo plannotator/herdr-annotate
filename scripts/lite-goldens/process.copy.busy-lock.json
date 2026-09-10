@@ -1,0 +1,31 @@
+{
+  "process.copy.busy-lock.artifact": [
+    "[",
+    "  {",
+    "    \"kind\": \"dir\",",
+    "    \"mode\": \"0755\",",
+    "    \"path\": \".\"",
+    "  },",
+    "  {",
+    "    \"kind\": \"dir\",",
+    "    \"mode\": \"0755\",",
+    "    \"path\": \".annotations.lock\"",
+    "  }",
+    "]",
+    ""
+  ],
+  "process.copy.busy-lock.exit": [
+    "1"
+  ],
+  "process.copy.busy-lock.processes": [
+    "{\"args\":[\"notification\",\"show\",\"Copy failed\",\"--body\",\"Annotations are busy; try again.\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.copy.busy-lock.stderr": [
+    "Annotations are busy; try again.",
+    ""
+  ],
+  "process.copy.busy-lock.stdout": [
+    ""
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "process.manager.missing-state.exit": [
+    "1"
+  ],
+  "process.manager.missing-state.processes": [
+    ""
+  ],
+  "process.manager.missing-state.stderr": [
+    "HERDR_PLUGIN_STATE_DIR is not set",
+    ""
+  ],
+  "process.manager.missing-state.stdout": [
+    ""
+  ]
+}

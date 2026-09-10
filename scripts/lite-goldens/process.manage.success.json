@@ -1,0 +1,15 @@
+{
+  "process.manage.success.exit": [
+    "0"
+  ],
+  "process.manage.success.processes": [
+    "{\"args\":[\"plugin\",\"pane\",\"open\",\"--cwd\",\"<ROOT>\",\"--plugin\",\"annotate\",\"--entrypoint\",\"manager\",\"--placement\",\"popup\",\"--width\",\"100\",\"--height\",\"30\",\"--focus\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.manage.success.stderr": [
+    ""
+  ],
+  "process.manage.success.stdout": [
+    ""
+  ]
+}

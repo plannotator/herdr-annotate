@@ -1,0 +1,20 @@
+{
+  "process.capture.no-clipboard.artifact": [
+    "[]"
+  ],
+  "process.capture.no-clipboard.exit": [
+    "1"
+  ],
+  "process.capture.no-clipboard.processes": [
+    "{\"args\":[],\"command\":\"clipboard-read\"}",
+    "{\"args\":[\"notification\",\"show\",\"Annotate failed\",\"--body\",\"No supported clipboard reader is available\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.capture.no-clipboard.stderr": [
+    "No supported clipboard reader is available",
+    ""
+  ],
+  "process.capture.no-clipboard.stdout": [
+    ""
+  ]
+}

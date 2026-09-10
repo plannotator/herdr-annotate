@@ -1,0 +1,64 @@
+{
+  "process.copy.populated.artifact": [
+    "# Annotated context",
+    "",
+    "## Annotation 1",
+    "",
+    "Source: api 한 / server",
+    "",
+    "Selected text:",
+    "",
+    "```",
+    "third selection",
+    "```",
+    "",
+    "Comment:",
+    "",
+    "third comment",
+    "",
+    "## Annotation 2",
+    "",
+    "Source: api 한 / server",
+    "",
+    "Selected text:",
+    "",
+    "```",
+    "wide 한글 selection and enough text to exercise clipping at the detail edge",
+    "```",
+    "",
+    "Comment:",
+    "",
+    "second comment",
+    "",
+    "## Annotation 3",
+    "",
+    "Source: api 한 / server",
+    "",
+    "Selected text:",
+    "",
+    "````",
+    "first selection with ``` ticks",
+    "and a second line",
+    "````",
+    "",
+    "Comment:",
+    "",
+    "first comment",
+    "with two lines",
+    ""
+  ],
+  "process.copy.populated.exit": [
+    "0"
+  ],
+  "process.copy.populated.processes": [
+    "{\"args\":[],\"command\":\"clipboard-write\"}",
+    "{\"args\":[\"notification\",\"show\",\"Annotations copied\",\"--body\",\"3 annotations copied as Markdown.\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.copy.populated.stderr": [
+    ""
+  ],
+  "process.copy.populated.stdout": [
+    ""
+  ]
+}

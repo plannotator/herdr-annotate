@@ -1,0 +1,25 @@
+{
+  "process.capture.context.artifact": [
+    "{",
+    "  \"pending\": {",
+    "    \"bytes\": \"{\\\"selectedText\\\":\\\"context selection 한글\\\",\\\"context\\\":{\\\"workspace_id\\\":\\\"workspace-1\\\",\\\"workspace_label\\\":\\\"api 한\\\",\\\"tab_id\\\":\\\"tab-1\\\",\\\"tab_label\\\":\\\"server\\\",\\\"focused_pane_id\\\":\\\"pane-1\\\",\\\"focused_pane_cwd\\\":\\\"/workspace\\\",\\\"focused_pane_agent\\\":\\\"codex\\\"},\\\"capturedAt\\\":\\\"<TIMESTAMP>\\\"}\\n\",",
+    "    \"mode\": \"0600\",",
+    "    \"name\": \"pending-<TIME>-<PID>.json\"",
+    "  },",
+    "  \"runtime\": \"[\\n  {\\n    \\\"kind\\\": \\\"dir\\\",\\n    \\\"mode\\\": \\\"0755\\\",\\n    \\\"path\\\": \\\".\\\"\\n  },\\n  {\\n    \\\"kind\\\": \\\"dir\\\",\\n    \\\"mode\\\": \\\"0755\\\",\\n    \\\"path\\\": \\\"herdr-annotate-<UID>\\\"\\n  },\\n  {\\n    \\\"bytes\\\": \\\"lower-priority handoff\\\",\\n    \\\"kind\\\": \\\"file\\\",\\n    \\\"mode\\\": \\\"0644\\\",\\n    \\\"path\\\": \\\"herdr-annotate-<UID>/selection\\\"\\n  }\\n]\\n\"",
+    "}"
+  ],
+  "process.capture.context.exit": [
+    "0"
+  ],
+  "process.capture.context.processes": [
+    "{\"args\":[\"plugin\",\"pane\",\"open\",\"--cwd\",\"<ROOT>\",\"--plugin\",\"annotate\",\"--entrypoint\",\"editor\",\"--placement\",\"popup\",\"--width\",\"88\",\"--height\",\"24\",\"--env\",\"HERDR_ANNOTATE_PENDING=<ROOT>/pending-<TIME>-<PID>.json\",\"--focus\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.capture.context.stderr": [
+    ""
+  ],
+  "process.capture.context.stdout": [
+    ""
+  ]
+}

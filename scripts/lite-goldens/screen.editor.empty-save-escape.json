@@ -1,0 +1,86 @@
+{
+  "screen.editor.empty-save-escape.exit": [
+    "0"
+  ],
+  "screen.editor.empty-save-escape.osc52": [
+    "[]"
+  ],
+  "screen.editor.empty-save-escape.processes": [
+    ""
+  ],
+  "screen.editor.empty-save-escape.screen-count": [
+    "3"
+  ],
+  "screen.editor.empty-save-escape.screen.empty-save": [
+    "                                                                                      ",
+    "  Selected text                                                                       ",
+    "  selected wide 한·글· text                                                             ",
+    "  with a second line                                                                  ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "  Comment                                                                             ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "  Write a comment before saving.                                                      "
+  ],
+  "screen.editor.empty-save-escape.screen.escape": [
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      "
+  ],
+  "screen.editor.empty-save-escape.screen.initial": [
+    "                                                                                      ",
+    "  Selected text                                                                       ",
+    "  selected wide 한·글· text                                                             ",
+    "  with a second line                                                                  ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "  Comment                                                                             ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "  Ctrl+S save  ·  Esc cancel  ·  Enter new line                                       "
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "process.capture.stale-handoff.artifact": [
+    "{",
+    "  \"pending\": {",
+    "    \"bytes\": \"{\\\"selectedText\\\":\\\"clipboard after stale handoff\\\",\\\"context\\\":{},\\\"capturedAt\\\":\\\"<TIMESTAMP>\\\"}\\n\",",
+    "    \"mode\": \"0600\",",
+    "    \"name\": \"pending-<TIME>-<PID>.json\"",
+    "  },",
+    "  \"runtime\": \"[\\n  {\\n    \\\"kind\\\": \\\"dir\\\",\\n    \\\"mode\\\": \\\"0755\\\",\\n    \\\"path\\\": \\\".\\\"\\n  },\\n  {\\n    \\\"kind\\\": \\\"dir\\\",\\n    \\\"mode\\\": \\\"0755\\\",\\n    \\\"path\\\": \\\"herdr-annotate-<UID>\\\"\\n  }\\n]\\n\"",
+    "}"
+  ],
+  "process.capture.stale-handoff.exit": [
+    "0"
+  ],
+  "process.capture.stale-handoff.processes": [
+    "{\"args\":[],\"command\":\"clipboard-read\"}",
+    "{\"args\":[\"plugin\",\"pane\",\"open\",\"--cwd\",\"<ROOT>\",\"--plugin\",\"annotate\",\"--entrypoint\",\"editor\",\"--placement\",\"popup\",\"--width\",\"88\",\"--height\",\"24\",\"--env\",\"HERDR_ANNOTATE_PENDING=<ROOT>/pending-<TIME>-<PID>.json\",\"--focus\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.capture.stale-handoff.stderr": [
+    ""
+  ],
+  "process.capture.stale-handoff.stdout": [
+    ""
+  ]
+}

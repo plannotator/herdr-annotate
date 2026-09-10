@@ -1,0 +1,62 @@
+{
+  "screen.editor.sigterm.exit": [
+    "0"
+  ],
+  "screen.editor.sigterm.osc52": [
+    "[]"
+  ],
+  "screen.editor.sigterm.processes": [
+    ""
+  ],
+  "screen.editor.sigterm.screen-count": [
+    "2"
+  ],
+  "screen.editor.sigterm.screen.initial": [
+    "                                                                                      ",
+    "  Selected text                                                                       ",
+    "  selected wide 한·글· text                                                             ",
+    "  with a second line                                                                  ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "  Comment                                                                             ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "  Ctrl+S save  ·  Esc cancel  ·  Enter new line                                       "
+  ],
+  "screen.editor.sigterm.screen.sigterm": [
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      "
+  ]
+}

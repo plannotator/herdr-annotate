@@ -1,0 +1,102 @@
+{
+  "screen.editor.pending-file-save.exit": [
+    "0"
+  ],
+  "screen.editor.pending-file-save.osc52": [
+    "[]"
+  ],
+  "screen.editor.pending-file-save.processes": [
+    ""
+  ],
+  "screen.editor.pending-file-save.screen-count": [
+    "3"
+  ],
+  "screen.editor.pending-file-save.screen.chars": [
+    "                                                                                      ",
+    "  Selected text                                                                       ",
+    "  selection from pending file                                                         ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "  Comment                                                                             ",
+    "  pending comment                                                                     ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "  Ctrl+S save  ·  Esc cancel  ·  Enter new line                                       "
+  ],
+  "screen.editor.pending-file-save.screen.initial": [
+    "                                                                                      ",
+    "  Selected text                                                                       ",
+    "  selection from pending file                                                         ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "  Comment                                                                             ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "  Ctrl+S save  ·  Esc cancel  ·  Enter new line                                       "
+  ],
+  "screen.editor.pending-file-save.screen.save": [
+    "                                                                                      ",
+    "  Selected text                                                                       ",
+    "  selection from pending file                                                         ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "  Comment                                                                             ",
+    "  pending comment                                                                     ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "  Saved.                                                                              "
+  ],
+  "screen.editor.pending-file-save.state": [
+    "[",
+    "  {",
+    "    \"kind\": \"dir\",",
+    "    \"mode\": \"0700\",",
+    "    \"path\": \".\"",
+    "  },",
+    "  {",
+    "    \"bytes\": \"{\\\"selectedText\\\":\\\"selection from pending file\\\",\\\"capturedAt\\\":\\\"2026-08-08T00:00:00.000Z\\\",\\\"context\\\":{\\\"workspace_label\\\":\\\"pending workspace\\\",\\\"tab_label\\\":\\\"pending tab\\\"},\\\"id\\\":\\\"<UUID>\\\",\\\"comment\\\":\\\"pending comment\\\",\\\"createdAt\\\":\\\"<TIMESTAMP>\\\"}\\n\",",
+    "    \"kind\": \"file\",",
+    "    \"mode\": \"0600\",",
+    "    \"path\": \"annotations.jsonl\"",
+    "  }",
+    "]",
+    ""
+  ]
+}

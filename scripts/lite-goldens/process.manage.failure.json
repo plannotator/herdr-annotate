@@ -1,0 +1,17 @@
+{
+  "process.manage.failure.exit": [
+    "1"
+  ],
+  "process.manage.failure.processes": [
+    "{\"args\":[\"plugin\",\"pane\",\"open\",\"--cwd\",\"<ROOT>\",\"--plugin\",\"annotate\",\"--entrypoint\",\"manager\",\"--placement\",\"popup\",\"--width\",\"100\",\"--height\",\"30\",\"--focus\"],\"command\":\"herdr-fake\"}",
+    "{\"args\":[\"notification\",\"show\",\"Unable to open annotations\",\"--body\",\"manager open failed\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.manage.failure.stderr": [
+    "manager open failed",
+    ""
+  ],
+  "process.manage.failure.stdout": [
+    ""
+  ]
+}

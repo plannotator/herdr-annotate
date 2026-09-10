@@ -1,0 +1,25 @@
+{
+  "process.copy.stale-lock.artifact": [
+    "[",
+    "  {",
+    "    \"kind\": \"dir\",",
+    "    \"mode\": \"0755\",",
+    "    \"path\": \".\"",
+    "  }",
+    "]",
+    ""
+  ],
+  "process.copy.stale-lock.exit": [
+    "0"
+  ],
+  "process.copy.stale-lock.processes": [
+    "{\"args\":[\"notification\",\"show\",\"No annotations\",\"--body\",\"There is nothing to copy yet.\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.copy.stale-lock.stderr": [
+    ""
+  ],
+  "process.copy.stale-lock.stdout": [
+    ""
+  ]
+}

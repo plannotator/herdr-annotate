@@ -1,0 +1,33 @@
+{
+  "store.cross-read.exit": [
+    "0"
+  ],
+  "store.cross-read.markdown": [
+    "# Annotated context",
+    "",
+    "## Annotation 1",
+    "",
+    "Source: api 한 / server",
+    "",
+    "Selected text:",
+    "",
+    "```",
+    "selected wide 한글 text",
+    "with a second line",
+    "```",
+    "",
+    "Comment:",
+    "",
+    "alpha 한글 é",
+    "bt",
+    ""
+  ],
+  "store.cross-read.processes": [
+    "{\"args\":[],\"command\":\"clipboard-write\"}",
+    "{\"args\":[\"notification\",\"show\",\"Annotations copied\",\"--body\",\"1 annotation copied as Markdown.\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "store.cross-read.stderr": [
+    ""
+  ]
+}

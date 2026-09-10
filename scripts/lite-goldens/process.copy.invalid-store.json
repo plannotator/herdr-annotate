@@ -1,0 +1,16 @@
+{
+  "process.copy.invalid-store.exit": [
+    "1"
+  ],
+  "process.copy.invalid-store.processes": [
+    "{\"args\":[\"notification\",\"show\",\"Copy failed\",\"--body\",\"Unable to read annotations (invalid data)\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.copy.invalid-store.stderr": [
+    "Unable to read annotations (invalid data)",
+    ""
+  ],
+  "process.copy.invalid-store.stdout": [
+    ""
+  ]
+}

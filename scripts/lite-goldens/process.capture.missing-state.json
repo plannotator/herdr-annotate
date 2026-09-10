@@ -1,0 +1,16 @@
+{
+  "process.capture.missing-state.exit": [
+    "1"
+  ],
+  "process.capture.missing-state.processes": [
+    "{\"args\":[\"notification\",\"show\",\"Annotate failed\",\"--body\",\"HERDR_PLUGIN_STATE_DIR is not set\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.capture.missing-state.stderr": [
+    "HERDR_PLUGIN_STATE_DIR is not set",
+    ""
+  ],
+  "process.capture.missing-state.stdout": [
+    ""
+  ]
+}

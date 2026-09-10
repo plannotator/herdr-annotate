@@ -1,0 +1,20 @@
+{
+  "process.capture.open-failure.artifact": [
+    "[]"
+  ],
+  "process.capture.open-failure.exit": [
+    "1"
+  ],
+  "process.capture.open-failure.processes": [
+    "{\"args\":[\"plugin\",\"pane\",\"open\",\"--cwd\",\"<ROOT>\",\"--plugin\",\"annotate\",\"--entrypoint\",\"editor\",\"--placement\",\"popup\",\"--width\",\"88\",\"--height\",\"24\",\"--env\",\"HERDR_ANNOTATE_PENDING=<ROOT>/pending-<TIME>-<PID>.json\",\"--focus\"],\"command\":\"herdr-fake\"}",
+    "{\"args\":[\"notification\",\"show\",\"Annotate failed\",\"--body\",\"pane open failed\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.capture.open-failure.stderr": [
+    "pane open failed",
+    ""
+  ],
+  "process.capture.open-failure.stdout": [
+    ""
+  ]
+}

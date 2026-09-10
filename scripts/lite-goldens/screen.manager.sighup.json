@@ -1,0 +1,74 @@
+{
+  "screen.manager.sighup.exit": [
+    "0"
+  ],
+  "screen.manager.sighup.osc52": [
+    "[]"
+  ],
+  "screen.manager.sighup.processes": [
+    ""
+  ],
+  "screen.manager.sighup.screen-count": [
+    "2"
+  ],
+  "screen.manager.sighup.screen.initial": [
+    " Annotations (3)  newest first                                                                    ",
+    " › third selection                 │ Selected text                                                ",
+    "   wide 한·글· selection and enough… │ third selection                                              ",
+    "   first selection with ``` ticks… │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │ Comment                                                      ",
+    "                                   │ third comment                                                ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │                                                              ",
+    "                                   │ api 한· / server · 8/10/2026, 8:21:23 PM                      ",
+    "                                   │                                                              ",
+    " j/k · y copy · c all · Shift+C copy+archive · d delete · Shift+D clear · Tab archives · q        "
+  ],
+  "screen.manager.sighup.screen.sighup": [
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  ",
+    "                                                                                                  "
+  ]
+}

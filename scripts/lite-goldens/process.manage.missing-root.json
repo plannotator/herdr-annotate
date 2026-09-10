@@ -1,0 +1,16 @@
+{
+  "process.manage.missing-root.exit": [
+    "1"
+  ],
+  "process.manage.missing-root.processes": [
+    "{\"args\":[\"notification\",\"show\",\"Unable to open annotations\",\"--body\",\"HERDR_PLUGIN_ROOT is not set\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.manage.missing-root.stderr": [
+    "HERDR_PLUGIN_ROOT is not set",
+    ""
+  ],
+  "process.manage.missing-root.stdout": [
+    ""
+  ]
+}

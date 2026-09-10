@@ -1,0 +1,16 @@
+{
+  "process.copy-archive.missing-state.exit": [
+    "1"
+  ],
+  "process.copy-archive.missing-state.processes": [
+    "{\"args\":[\"notification\",\"show\",\"Copy and archive failed\",\"--body\",\"HERDR_PLUGIN_STATE_DIR is not set\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.copy-archive.missing-state.stderr": [
+    "HERDR_PLUGIN_STATE_DIR is not set",
+    ""
+  ],
+  "process.copy-archive.missing-state.stdout": [
+    ""
+  ]
+}

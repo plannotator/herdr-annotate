@@ -1,0 +1,62 @@
+{
+  "screen.editor.control-c.exit": [
+    "0"
+  ],
+  "screen.editor.control-c.osc52": [
+    "[]"
+  ],
+  "screen.editor.control-c.processes": [
+    ""
+  ],
+  "screen.editor.control-c.screen-count": [
+    "2"
+  ],
+  "screen.editor.control-c.screen.control-c": [
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      "
+  ],
+  "screen.editor.control-c.screen.initial": [
+    "                                                                                      ",
+    "  Selected text                                                                       ",
+    "  selected wide 한·글· text                                                             ",
+    "  with a second line                                                                  ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "  Comment                                                                             ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "                                                                                      ",
+    "  Ctrl+S save  ·  Esc cancel  ·  Enter new line                                       "
+  ]
+}

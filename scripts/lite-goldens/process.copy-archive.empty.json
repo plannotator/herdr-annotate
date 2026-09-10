@@ -1,0 +1,21 @@
+{
+  "process.copy-archive.empty.artifact": [
+    "{",
+    "  \"clipboard\": \"\",",
+    "  \"state\": \"[\\n  {\\n    \\\"kind\\\": \\\"dir\\\",\\n    \\\"mode\\\": \\\"0755\\\",\\n    \\\"path\\\": \\\".\\\"\\n  }\\n]\\n\"",
+    "}"
+  ],
+  "process.copy-archive.empty.exit": [
+    "0"
+  ],
+  "process.copy-archive.empty.processes": [
+    "{\"args\":[\"notification\",\"show\",\"No annotations\",\"--body\",\"There is nothing to copy yet.\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.copy-archive.empty.stderr": [
+    ""
+  ],
+  "process.copy-archive.empty.stdout": [
+    ""
+  ]
+}

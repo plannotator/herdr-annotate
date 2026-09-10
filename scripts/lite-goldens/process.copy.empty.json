@@ -1,0 +1,25 @@
+{
+  "process.copy.empty.artifact": [
+    "[",
+    "  {",
+    "    \"kind\": \"dir\",",
+    "    \"mode\": \"0755\",",
+    "    \"path\": \".\"",
+    "  }",
+    "]",
+    ""
+  ],
+  "process.copy.empty.exit": [
+    "0"
+  ],
+  "process.copy.empty.processes": [
+    "{\"args\":[\"notification\",\"show\",\"No annotations\",\"--body\",\"There is nothing to copy yet.\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.copy.empty.stderr": [
+    ""
+  ],
+  "process.copy.empty.stdout": [
+    ""
+  ]
+}

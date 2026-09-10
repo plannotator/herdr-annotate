@@ -1,0 +1,36 @@
+{
+  "process.copy.single.artifact": [
+    "# Annotated context",
+    "",
+    "## Annotation 1",
+    "",
+    "Source: api 한 / server",
+    "",
+    "Selected text:",
+    "",
+    "````",
+    "first selection with ``` ticks",
+    "and a second line",
+    "````",
+    "",
+    "Comment:",
+    "",
+    "first comment",
+    "with two lines",
+    ""
+  ],
+  "process.copy.single.exit": [
+    "0"
+  ],
+  "process.copy.single.processes": [
+    "{\"args\":[],\"command\":\"clipboard-write\"}",
+    "{\"args\":[\"notification\",\"show\",\"Annotations copied\",\"--body\",\"1 annotation copied as Markdown.\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.copy.single.stderr": [
+    ""
+  ],
+  "process.copy.single.stdout": [
+    ""
+  ]
+}

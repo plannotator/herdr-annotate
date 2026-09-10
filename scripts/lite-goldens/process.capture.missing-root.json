@@ -1,0 +1,16 @@
+{
+  "process.capture.missing-root.exit": [
+    "1"
+  ],
+  "process.capture.missing-root.processes": [
+    "{\"args\":[\"notification\",\"show\",\"Annotate failed\",\"--body\",\"HERDR_PLUGIN_ROOT is not set\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.capture.missing-root.stderr": [
+    "HERDR_PLUGIN_ROOT is not set",
+    ""
+  ],
+  "process.capture.missing-root.stdout": [
+    ""
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "process.capture.invalid-utf8-handoff.artifact": [
+    "{",
+    "  \"pending\": {",
+    "    \"bytes\": \"{\\\"selectedText\\\":\\\"invalid-�-handoff\\\",\\\"context\\\":{},\\\"capturedAt\\\":\\\"<TIMESTAMP>\\\"}\\n\",",
+    "    \"mode\": \"0600\",",
+    "    \"name\": \"pending-<TIME>-<PID>.json\"",
+    "  },",
+    "  \"runtime\": \"[\\n  {\\n    \\\"kind\\\": \\\"dir\\\",\\n    \\\"mode\\\": \\\"0755\\\",\\n    \\\"path\\\": \\\".\\\"\\n  },\\n  {\\n    \\\"kind\\\": \\\"dir\\\",\\n    \\\"mode\\\": \\\"0755\\\",\\n    \\\"path\\\": \\\"herdr-annotate-<UID>\\\"\\n  }\\n]\\n\"",
+    "}"
+  ],
+  "process.capture.invalid-utf8-handoff.exit": [
+    "0"
+  ],
+  "process.capture.invalid-utf8-handoff.processes": [
+    "{\"args\":[\"plugin\",\"pane\",\"open\",\"--cwd\",\"<ROOT>\",\"--plugin\",\"annotate\",\"--entrypoint\",\"editor\",\"--placement\",\"popup\",\"--width\",\"88\",\"--height\",\"24\",\"--env\",\"HERDR_ANNOTATE_PENDING=<ROOT>/pending-<TIME>-<PID>.json\",\"--focus\"],\"command\":\"herdr-fake\"}",
+    ""
+  ],
+  "process.capture.invalid-utf8-handoff.stderr": [
+    ""
+  ],
+  "process.capture.invalid-utf8-handoff.stdout": [
+    ""
+  ]
+}
