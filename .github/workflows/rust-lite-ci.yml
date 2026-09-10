@@ -6,11 +6,13 @@ on:
       - "rust/**"
       - "lite/**"
       - "herdr-plugin.toml"
-      - "docs/rust-lite-parity-proof.md"
+      - "herdr-annotate.version"
+      - "scripts/fetch-herdr-annotate.*"
       - "scripts/lite-goldens/**"
       - "scripts/lite-regression.py"
       - "scripts/lite-regression.sh"
-      - "scripts/smoke-rust-lite.sh"
+      - "scripts/smoke.sh"
+      - "scripts/stage-local.sh"
       - ".github/workflows/rust-lite-*.yml"
   merge_group:
 

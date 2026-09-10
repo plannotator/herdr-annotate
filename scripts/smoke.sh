@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Smoke-test the plugin the way users get it: fresh install, upgrade from an old commit,
-# lite, and the lite -> full swap, then exercise the review pane in a disposable Herdr
-# session. Restores whatever `annotate` install was present before it ran.
+# Smoke-test the plugin the way users get it: fresh install, upgrade from an old commit, lite,
+# and the lite -> full swap, exercising both fetched binaries and both panes in a disposable
+# Herdr session. Restores whatever `annotate` install was present before it ran.
 #
 #   HERDR_SESSION=<disposable named session> bash scripts/smoke.sh [old-ref]
 #
 # Requires: herdr, python3, a running named session in HERDR_SESSION (never the default
-# session; the pane test opens and closes panes in it). The plugin registry is global, so
+# session; the pane tests open and close panes in it). The plugin registry is global, so
 # this replaces the machine's `annotate` install while it runs and puts it back at the end.
 set -euo pipefail
 
@@ -22,11 +22,50 @@ for p in json.load(sys.stdin)['result']['plugins']:
 field() { python3 -c "import json,sys; p=json.load(sys.stdin); print(eval(sys.argv[1]))" "$1"; }
 actions() { herdr plugin action list --plugin annotate | python3 -c "
 import json,sys; print(','.join(sorted(a['action_id'] for a in json.load(sys.stdin)['result']['actions'])))"; }
-bin_version() {
-  local root; root="$(plugin_json | field "p['plugin_root']")"
-  local bin="$root/bin/plannotator-tui.exe"; [ -x "$bin" ] && "$bin" --version | awk '{print $2}' || echo none
+programs() { plugin_json | python3 -c "
+import json,sys
+print(','.join(sorted({a['command'][0] for a in json.load(sys.stdin)['actions']})))"; }
+plugin_root() { plugin_json | field "p['plugin_root']"; }
+# Lite installs from the lite/ subdirectory and shares the checkout's one staged bin/.
+checkout_root() {
+  local root; root="$(plugin_root)"
+  case "$root" in */lite) printf '%s' "${root%/lite}" ;; *) printf '%s' "$root" ;; esac
 }
-pin() { local root; root="$(plugin_json | field "p['plugin_root']")"; tr -d '[:space:]' < "$root/plannotator-tui.version" 2>/dev/null || echo none; }
+tui_version() {
+  local bin; bin="$(plugin_root)/bin/plannotator-tui.exe"
+  [ -x "$bin" ] && "$bin" --version | awk '{print $2}' || echo none
+}
+tui_pin() { tr -d '[:space:]' < "$(plugin_root)/plannotator-tui.version" 2>/dev/null || echo none; }
+native_version() {
+  local bin; bin="$(checkout_root)/bin/herdr-annotate.exe"
+  [ -x "$bin" ] && "$bin" --version | awk '{print $2}' || echo none
+}
+native_pin() { tr -d '[:space:]' < "$(checkout_root)/herdr-annotate.version" 2>/dev/null || echo none; }
+pane_id() { herdr pane list | python3 -c "
+import json,sys
+panes=[p for p in json.load(sys.stdin)['result']['panes'] if p.get('label')==sys.argv[1]]
+print(panes[-1]['pane_id'] if panes else '')" "$1"; }
+wait_pane() {
+  local pane=""
+  for _ in $(seq 1 20); do
+    pane="$(pane_id "$1")"
+    [ -n "$pane" ] && break
+    sleep 0.25
+  done
+  printf '%s' "$pane"
+}
+# The manage action runs the native binary, which opens the manager pane with --cwd set to the
+# plugin root: the whole path a bound key takes.
+manager_renders() {
+  herdr plugin action invoke annotate.manage >/dev/null 2>&1 || true
+  local pane result=FAIL
+  pane="$(wait_pane Annotations)"
+  if [ -n "$pane" ] && herdr pane wait-output "$pane" --match "Annotations (" --timeout 8000 >/dev/null 2>&1; then
+    result=ok
+  fi
+  [ -n "$pane" ] && herdr plugin pane close "$pane" >/dev/null 2>&1 || true
+  printf '%s' "$result"
+}
 check() { if [ "$2" = "$3" ]; then echo "  ok   $1: $2"; else echo "  FAIL $1: got '$2', want '$3'" >&2; failures=$((failures+1)); fi; }
 install() { herdr plugin uninstall annotate >/dev/null 2>&1 || true; herdr plugin install "$@" --yes >/dev/null; }
 failures=0
@@ -55,15 +94,16 @@ trap restore EXIT
 echo "== fresh install: full"
 install "$spec"
 check "actions" "$(actions)" "capture,copy-archive,copy-context,last,manage,open,open-link"
-check "binary matches pin" "$(bin_version)" "$(pin)"
+check "action programs" "$(programs)" "./bin/herdr-annotate.exe,./bin/plannotator-tui.exe"
+check "review binary matches pin" "$(tui_version)" "$(tui_pin)"
+check "native binary matches pin" "$(native_version)" "$(native_pin)"
+check "manager pane" "$(manager_renders)" "ok"
 
 echo "== review pane opens with --cwd (the #7 regression)"
 work="$(mktemp -d)"; mkdir -p "$work/docs"; printf '# Smoke plan\n\nhello\n' > "$work/docs/plan.md"
-before_panes="$(herdr pane list | python3 -c "import json,sys; print(len(json.load(sys.stdin)['result']['panes']))")"
 herdr plugin pane open --plugin annotate --entrypoint doc --placement overlay --cwd "$work" \
   --env "PLANNOTATOR_TUI_FILE=$work/docs/plan.md" >/dev/null
-pane="$(herdr pane list | python3 -c "
-import json,sys; ps=[p for p in json.load(sys.stdin)['result']['panes'] if p.get('label')=='Annotate']; print(ps[-1]['pane_id'] if ps else '')")"
+pane="$(wait_pane Annotate)"
 if [ -n "$pane" ] && herdr pane wait-output "$pane" --match "Smoke plan" --timeout 8000 >/dev/null 2>&1; then
   echo "  ok   pane $pane rendered the document"
 else
@@ -74,20 +114,25 @@ rm -rf "$work"
 
 echo "== upgrade: $old_ref -> main"
 install "$spec" --ref "$old_ref"
-old_bin="$(bin_version)"; echo "  old binary $old_bin (pin $(pin))"
+old_bin="$(tui_version)"; echo "  old review binary $old_bin (pin $(tui_pin))"
 install "$spec"
-check "binary replaced on upgrade" "$(bin_version)" "$(pin)"
-[ "$old_bin" != "$(bin_version)" ] && echo "  ok   binary changed $old_bin -> $(bin_version)" || echo "  note old and new pins are equal; replacement not exercised"
+check "review binary replaced on upgrade" "$(tui_version)" "$(tui_pin)"
+check "native binary installed on upgrade" "$(native_version)" "$(native_pin)"
+[ "$old_bin" != "$(tui_version)" ] && echo "  ok   review binary changed $old_bin -> $(tui_version)" || echo "  note old and new pins are equal; replacement not exercised"
 
 echo "== fresh install: lite"
 install "$spec/lite"
 check "actions" "$(actions)" "capture,copy-archive,copy-context,manage"
-check "no binary" "$(bin_version)" "none"
+check "action programs" "$(programs)" "../bin/herdr-annotate.exe"
+check "no review binary" "$(tui_version)" "none"
+check "native binary matches pin" "$(native_version)" "$(native_pin)"
+check "manager pane" "$(manager_renders)" "ok"
 
 echo "== swap: lite -> full"
 install "$spec"
 check "actions" "$(actions)" "capture,copy-archive,copy-context,last,manage,open,open-link"
-check "binary" "$(bin_version)" "$(pin)"
+check "review binary" "$(tui_version)" "$(tui_pin)"
+check "native binary" "$(native_version)" "$(native_pin)"
 
 echo "== result: $failures failure(s)"
 [ "$failures" -eq 0 ]
