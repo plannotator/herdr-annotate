@@ -9,8 +9,23 @@ from pathlib import Path
 
 
 PROGRAM = "./bin/plannotator-tui.exe"
+NATIVE_PROGRAM = "./bin/herdr-annotate.exe"
 FULL_PLATFORMS = {"macos", "linux"}
 UNIX_BUILD = ["bash", "scripts/fetch-plannotator-tui.sh"]
+NATIVE_UNIX_BUILD = ["bash", "scripts/fetch-herdr-annotate.sh"]
+NATIVE_WINDOWS_BUILD = [
+    "powershell.exe",
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    "scripts/fetch-herdr-annotate.ps1",
+]
+NATIVE_ENTRIES = {
+    "actions": ("capture", "copy-context", "copy-archive", "manage"),
+    "panes": ("editor", "manager"),
+}
 DISTRIBUTED_PANE = [
     "sh",
     "-c",
@@ -90,16 +105,41 @@ def check_top_level_windows(path: Path, manifest: dict[str, object]) -> None:
         fail(path, "top-level platforms must be macOS, Linux, and Windows")
 
 
-def check_distributed(path: Path, version_path: Path) -> None:
+def check_native_lite(path: Path, manifest: dict[str, object]) -> None:
+    """The Lite tools reach Windows too: one native argv, no shell, no platform gate."""
+    for table, identifiers in NATIVE_ENTRIES.items():
+        for identifier in identifiers:
+            item = entry(path, manifest, table, identifier)
+            command = item.get("command")
+            if command != [NATIVE_PROGRAM, identifier]:
+                fail(path, f"unexpected {table}.{identifier} argv: {command!r}")
+            if "platforms" in item:
+                fail(path, f"{table}.{identifier} is gated to {item['platforms']!r}")
+            if any("$" in argument for argument in command):
+                fail(path, f"interpolation found in {table}.{identifier}: {command!r}")
+
+
+def check_distributed(path: Path, version_path: Path, native_version_path: Path) -> None:
     manifest = load(path)
     check_top_level_windows(path, manifest)
+    check_native_lite(path, manifest)
     if version_path.read_text(encoding="utf-8").strip() != "0.8.0":
         fail(version_path, "plannotator-tui.version is not 0.8.0")
+    if native_version_path.read_text(encoding="utf-8").strip() != "0.1.0":
+        fail(native_version_path, "herdr-annotate.version is not 0.1.0")
 
     build_entries = builds(path, manifest)
-    if len(build_entries) != 1:
-        fail(path, f"expected one Full build, found {len(build_entries)}")
-    build = build_entries[0]
+    if len(build_entries) != 3:
+        fail(path, f"expected three Full builds, found {len(build_entries)}")
+    native_unix, native_windows, build = build_entries
+    if platforms(path, manifest, native_unix) != FULL_PLATFORMS:
+        fail(path, f"native Unix build platforms are {platforms(path, manifest, native_unix)!r}")
+    if native_unix.get("command") != NATIVE_UNIX_BUILD:
+        fail(path, f"unexpected native Unix build argv: {native_unix.get('command')!r}")
+    if platforms(path, manifest, native_windows) != {"windows"}:
+        fail(path, "the native PowerShell build is not Windows-only")
+    if native_windows.get("command") != NATIVE_WINDOWS_BUILD:
+        fail(path, f"unexpected native Windows build argv: {native_windows.get('command')!r}")
     if platforms(path, manifest, build) != FULL_PLATFORMS:
         fail(path, f"Full build platforms are {platforms(path, manifest, build)!r}")
     if build.get("command") != UNIX_BUILD:
@@ -166,7 +206,11 @@ def main() -> None:
     if len(sys.argv) > 2:
         raise SystemExit("usage: test-windows-full-manifest.py [development-manifest]")
     root = Path(__file__).resolve().parent.parent
-    check_distributed(root / "herdr-plugin.toml", root / "plannotator-tui.version")
+    check_distributed(
+        root / "herdr-plugin.toml",
+        root / "plannotator-tui.version",
+        root / "herdr-annotate.version",
+    )
     if len(sys.argv) == 2:
         check_development(Path(sys.argv[1]))
 

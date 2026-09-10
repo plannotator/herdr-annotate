@@ -1828,13 +1828,9 @@ def verify_manifests(root: Path, goldens: Goldens) -> None:
                     (entry.get(field), entry.get(field)),
                     (native_entry.get(field), full_entry.get(field)),
                 )
-            lite_command = entry.get("command", [])
             goldens.equal(
                 f"manifest.{table}.{identifier}.command",
-                (
-                    [LITE_NATIVE_PROGRAM, identifier],
-                    [part.replace("../src/", "src/") for part in lite_command],
-                ),
+                ([LITE_NATIVE_PROGRAM, identifier], [NATIVE_PROGRAM, identifier]),
                 (native_entry.get("command"), full_entry.get("command")),
             )
             goldens.equal(
