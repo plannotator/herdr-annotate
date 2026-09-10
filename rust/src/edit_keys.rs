@@ -1,7 +1,8 @@
 //! Word and line editing keys for the comment editor.
 //!
-//! This mirrors `src/edit-keys.ts` character for character so both runtimes move, and kill, by the
-//! same boundaries. The helpers work on the editor's `Vec<char>` buffer and its scalar cursor.
+//! This mirrors the retired Bun runtime's `edit-keys.ts` character for character, so the editor
+//! still moves, and kills, by the same boundaries. The helpers work on the editor's `Vec<char>`
+//! buffer and its scalar cursor.
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 

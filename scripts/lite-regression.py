@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Deterministic golden regression harness for Herdr Annotate Lite.
 
-The goldens under scripts/lite-goldens were recorded from the retired Bun runtime, so a green
-run is the standing proof that the native runtime still behaves the way the Bun one did. The
-harness runs the native binary only; --record rewrites the goldens from the current run and is
-for deliberate behavior changes.
+The goldens under scripts/lite-goldens were recorded from the retired Bun runtime, so a green run
+is the standing proof that the native runtime still behaves the way the Bun one did. --record
+rewrites them from the current run and is only for a deliberate behavior change.
 """
 
 from __future__ import annotations
@@ -49,16 +48,8 @@ ISO_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z")
 UUID_PATTERN = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
 )
-# The Bun entrypoints the goldens were recorded from. Only --record --from-bun runs them.
-BUN_SCRIPTS = {
-    "capture": "capture.ts",
-    "copy-context": "export.ts",
-    "copy-archive": "export-archive.ts",
-    "manage": "open-manager.ts",
-    "editor": "editor.ts",
-    "manager": "manager.ts",
-}
-ENTRYPOINTS = tuple(sorted(BUN_SCRIPTS))
+# The six entrypoints the Lite manifest declares, and the whole surface this harness drives.
+ENTRYPOINTS = ("capture", "copy-archive", "copy-context", "editor", "manage", "manager")
 # The Full manifest at the repository root starts the binary in its own bin/; the Lite variant
 # in lite/ shares that one staged binary, the way it shared the Bun sources.
 NATIVE_PROGRAM = "./bin/herdr-annotate.exe"
@@ -253,7 +244,7 @@ class Goldens:
 
 
 class TerminalGrid:
-    """Small ANSI terminal model for the sequences emitted by Bun and Ratatui."""
+    """Small ANSI terminal model for the sequences a Ratatui pane emits."""
 
     def __init__(self, rows: int, cols: int) -> None:
         self.rows = rows
@@ -695,17 +686,9 @@ raise SystemExit(0)
 
 
 class Harness:
-    def __init__(
-        self,
-        root: Path,
-        binary: Path,
-        implementation: str,
-        workspace: Path,
-        goldens: Goldens,
-    ) -> None:
+    def __init__(self, root: Path, binary: Path, workspace: Path, goldens: Goldens) -> None:
         self.root = root
         self.binary = binary
-        self.implementation = implementation
         self.workspace = workspace
         self.goldens = goldens
         self.fake_bin = create_fakes(workspace / "fake-bin")
@@ -715,8 +698,6 @@ class Harness:
         }
 
     def command(self, entrypoint: str) -> list[str]:
-        if self.implementation == "bun":
-            return ["bun", str(self.root / "src" / BUN_SCRIPTS[entrypoint])]
         return [str(self.binary), entrypoint]
 
     def environment(
@@ -799,11 +780,11 @@ class Harness:
         self,
         name: str,
         entrypoint: str,
-        setup: Callable[[str, Path, Path, Path, Path, Path], Mapping[str, str] | None],
-        inspect: Callable[[str, Path, Path, Path, Path, Path], object] | None = None,
+        setup: Callable[[Path, Path, Path, Path, Path], Mapping[str, str] | None],
+        inspect: Callable[[Path, Path, Path, Path, Path], object] | None = None,
     ) -> Path:
         state, runtime, log, clipboard_input, clipboard_output = self.case_paths(name)
-        extra = setup(self.implementation, state, runtime, log, clipboard_input, clipboard_output) or {}
+        extra = setup(state, runtime, log, clipboard_input, clipboard_output) or {}
         env = self.environment(state, runtime, log, clipboard_input, clipboard_output, extra)
         result = self.run(entrypoint, env)
         self.record_chains(adapter_log(log))
@@ -816,7 +797,7 @@ class Harness:
             self.goldens.check(
                 name,
                 f"{name}.artifact",
-                inspect(self.implementation, state, runtime, log, clipboard_input, clipboard_output),
+                inspect(state, runtime, log, clipboard_input, clipboard_output),
             )
         return state
 
@@ -829,14 +810,14 @@ class Harness:
         rows: int,
         cols: int,
         seed: Callable[[Path], None],
-        extra: Mapping[str, str] | Callable[[str, Path], Mapping[str, str]] | None = None,
+        extra: Mapping[str, str] | Callable[[Path], Mapping[str, str]] | None = None,
         compare_state: bool = False,
         compare_clipboard: bool = False,
     ) -> Path:
         state, runtime, log, clipboard_input, clipboard_output = self.case_paths(name)
         clipboard_input.write_bytes(b"clipboard selection")
         seed(state)
-        case_extra = extra(self.implementation, state) if callable(extra) else extra
+        case_extra = extra(state) if callable(extra) else extra
         env = self.environment(state, runtime, log, clipboard_input, clipboard_output, case_extra)
         session = PtySession(self.command(entrypoint), env, self.root, rows, cols)
         session.wait_for(marker)
@@ -875,7 +856,7 @@ class Harness:
         return state
 
 
-def pending_artifact(_implementation: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> object:
+def pending_artifact(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> object:
     del runtime, log, source, sink
     files = sorted(state.glob("pending-*.json"))
     if len(files) != 1:
@@ -888,27 +869,24 @@ def pending_artifact(_implementation: str, state: Path, runtime: Path, log: Path
     }
 
 
-def pending_and_runtime_artifact(
-    implementation: str,
-    state: Path,
+def pending_and_runtime_artifact(state: Path,
     runtime: Path,
     log: Path,
     source: Path,
     sink: Path,
 ) -> object:
     return {
-        "pending": pending_artifact(implementation, state, runtime, log, source, sink),
+        "pending": pending_artifact(state, runtime, log, source, sink),
         "runtime": state_snapshot(runtime, [runtime]).decode("utf-8"),
     }
 
 
-def clipboard_artifact(_implementation: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> object:
+def clipboard_artifact(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> object:
     del state, runtime, log, source
     return sink.read_bytes() if sink.exists() else b""
 
 
-def clipboard_and_state_artifact(
-    _implementation: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+def clipboard_and_state_artifact(state: Path, runtime: Path, log: Path, source: Path, sink: Path
 ) -> object:
     del runtime, log, source
     return {
@@ -917,7 +895,7 @@ def clipboard_and_state_artifact(
     }
 
 
-def no_pending_artifact(_implementation: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> object:
+def no_pending_artifact(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> object:
     del runtime, log, source, sink
     return sorted(path.name for path in state.glob("pending-*.json")) if state.exists() else []
 
@@ -942,7 +920,7 @@ def run_process_layer(harness: Harness) -> None:
     def handoff_path(runtime: Path) -> Path:
         return runtime / f"herdr-annotate-{os.getuid() if hasattr(os, 'getuid') else 'user'}" / "selection"
 
-    def capture_context(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
+    def capture_context(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
         del log, sink
         state.mkdir()
         handoff = handoff_path(runtime)
@@ -955,7 +933,7 @@ def run_process_layer(harness: Harness) -> None:
         "process.capture.context", "capture", capture_context, pending_and_runtime_artifact
     )
 
-    def capture_handoff(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+    def capture_handoff(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del log, sink
         state.mkdir()
         handoff = handoff_path(runtime)
@@ -967,8 +945,7 @@ def run_process_layer(harness: Harness) -> None:
         "process.capture.handoff", "capture", capture_handoff, pending_and_runtime_artifact
     )
 
-    def capture_stale_handoff(
-        _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+    def capture_stale_handoff(state: Path, runtime: Path, log: Path, source: Path, sink: Path
     ) -> None:
         del log, sink
         state.mkdir()
@@ -986,8 +963,7 @@ def run_process_layer(harness: Harness) -> None:
         pending_and_runtime_artifact,
     )
 
-    def capture_blank_handoff(
-        _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+    def capture_blank_handoff(state: Path, runtime: Path, log: Path, source: Path, sink: Path
     ) -> None:
         del log, sink
         state.mkdir()
@@ -1003,8 +979,7 @@ def run_process_layer(harness: Harness) -> None:
         pending_and_runtime_artifact,
     )
 
-    def capture_invalid_utf8_handoff(
-        _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+    def capture_invalid_utf8_handoff(state: Path, runtime: Path, log: Path, source: Path, sink: Path
     ) -> None:
         del log, sink
         state.mkdir()
@@ -1020,15 +995,14 @@ def run_process_layer(harness: Harness) -> None:
         pending_and_runtime_artifact,
     )
 
-    def capture_clipboard(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+    def capture_clipboard(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del runtime, log, sink
         state.mkdir()
         source.write_bytes("clipboard 한 selection".encode("utf-8"))
 
     harness.process_case("process.capture.clipboard", "capture", capture_clipboard, pending_artifact)
 
-    def capture_invalid_context(
-        _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+    def capture_invalid_context(state: Path, runtime: Path, log: Path, source: Path, sink: Path
     ) -> Mapping[str, str]:
         del runtime, log, sink
         state.mkdir()
@@ -1039,21 +1013,21 @@ def run_process_layer(harness: Harness) -> None:
         "process.capture.invalid-context", "capture", capture_invalid_context, pending_artifact
     )
 
-    def capture_empty(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+    def capture_empty(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del runtime, log, sink
         state.mkdir()
         source.write_bytes(b" \n\t")
 
     harness.process_case("process.capture.empty", "capture", capture_empty, no_pending_artifact)
 
-    def capture_no_clipboard(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
+    def capture_no_clipboard(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
         del runtime, log, source, sink
         state.mkdir()
         return {"LITE_CLIPBOARD_FAIL": "read"}
 
     harness.process_case("process.capture.no-clipboard", "capture", capture_no_clipboard, no_pending_artifact)
 
-    def capture_open_failure(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
+    def capture_open_failure(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
         del runtime, log, source, sink
         state.mkdir()
         return {
@@ -1064,16 +1038,14 @@ def run_process_layer(harness: Harness) -> None:
 
     harness.process_case("process.capture.open-failure", "capture", capture_open_failure, no_pending_artifact)
 
-    def capture_missing_state(
-        _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+    def capture_missing_state(state: Path, runtime: Path, log: Path, source: Path, sink: Path
     ) -> Mapping[str, str]:
         del state, runtime, log, source, sink
         return {"HERDR_PLUGIN_STATE_DIR": "", "HERDR_PLUGIN_CONTEXT_JSON": context}
 
     harness.process_case("process.capture.missing-state", "capture", capture_missing_state)
 
-    def capture_missing_root(
-        _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+    def capture_missing_root(state: Path, runtime: Path, log: Path, source: Path, sink: Path
     ) -> Mapping[str, str]:
         del runtime, log, source, sink
         state.mkdir()
@@ -1081,51 +1053,50 @@ def run_process_layer(harness: Harness) -> None:
 
     harness.process_case("process.capture.missing-root", "capture", capture_missing_root)
 
-    def copy_empty(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+    def copy_empty(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del state, runtime, log, source, sink
 
     harness.process_case(
         "process.copy.empty",
         "copy-context",
         copy_empty,
-        lambda impl, state, runtime, log, source, sink: state_snapshot(state, [state]),
+        lambda state, runtime, log, source, sink: state_snapshot(state, [state]),
     )
 
-    def copy_populated(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+    def copy_populated(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del runtime, log, source, sink
         seed_stores(state, archives=[])
 
     harness.process_case("process.copy.populated", "copy-context", copy_populated, clipboard_artifact)
 
-    def copy_single(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+    def copy_single(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del runtime, log, source, sink
         seed_stores(state, annotations=ANNOTATIONS[:1], archives=[])
 
     harness.process_case("process.copy.single", "copy-context", copy_single, clipboard_artifact)
 
-    def copy_no_clipboard(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
+    def copy_no_clipboard(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
         del runtime, log, source, sink
         seed_stores(state, archives=[])
         return {"LITE_CLIPBOARD_FAIL": "write"}
 
     harness.process_case("process.copy.no-clipboard", "copy-context", copy_no_clipboard, clipboard_artifact)
 
-    def copy_invalid(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+    def copy_invalid(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del runtime, log, source, sink
         state.mkdir()
         (state / "annotations.jsonl").write_text("{broken\n", encoding="utf-8")
 
     harness.process_case("process.copy.invalid-store", "copy-context", copy_invalid)
 
-    def copy_missing_state(
-        _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+    def copy_missing_state(state: Path, runtime: Path, log: Path, source: Path, sink: Path
     ) -> Mapping[str, str]:
         del state, runtime, log, source, sink
         return {"HERDR_PLUGIN_STATE_DIR": ""}
 
     harness.process_case("process.copy.missing-state", "copy-context", copy_missing_state)
 
-    def fresh_lock(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+    def fresh_lock(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del runtime, log, source, sink
         state.mkdir()
         (state / ".annotations.lock").mkdir()
@@ -1134,11 +1105,11 @@ def run_process_layer(harness: Harness) -> None:
         "process.copy.busy-lock",
         "copy-context",
         fresh_lock,
-        lambda impl, state, runtime, log, source, sink: state_snapshot(state, [state]),
+        lambda state, runtime, log, source, sink: state_snapshot(state, [state]),
     )
 
-    def stale_lock(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
-        fresh_lock(_impl, state, runtime, log, source, sink)
+    def stale_lock(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+        fresh_lock(state, runtime, log, source, sink)
         stale = time.time() - 31
         os.utime(state / ".annotations.lock", (stale, stale))
 
@@ -1146,10 +1117,10 @@ def run_process_layer(harness: Harness) -> None:
         "process.copy.stale-lock",
         "copy-context",
         stale_lock,
-        lambda impl, state, runtime, log, source, sink: state_snapshot(state, [state]),
+        lambda state, runtime, log, source, sink: state_snapshot(state, [state]),
     )
 
-    def copy_archive_empty(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+    def copy_archive_empty(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del state, runtime, log, source, sink
 
     harness.process_case(
@@ -1159,7 +1130,7 @@ def run_process_layer(harness: Harness) -> None:
         clipboard_and_state_artifact,
     )
 
-    def copy_archive_populated(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+    def copy_archive_populated(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del runtime, log, source, sink
         seed_stores(state)
 
@@ -1170,8 +1141,7 @@ def run_process_layer(harness: Harness) -> None:
         clipboard_and_state_artifact,
     )
 
-    def copy_archive_no_clipboard(
-        _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+    def copy_archive_no_clipboard(state: Path, runtime: Path, log: Path, source: Path, sink: Path
     ) -> Mapping[str, str]:
         del runtime, log, source, sink
         seed_stores(state)
@@ -1184,27 +1154,25 @@ def run_process_layer(harness: Harness) -> None:
         clipboard_and_state_artifact,
     )
 
-    def copy_archive_missing_state(
-        _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+    def copy_archive_missing_state(state: Path, runtime: Path, log: Path, source: Path, sink: Path
     ) -> Mapping[str, str]:
         del state, runtime, log, source, sink
         return {"HERDR_PLUGIN_STATE_DIR": ""}
 
     harness.process_case("process.copy-archive.missing-state", "copy-archive", copy_archive_missing_state)
 
-    def manage_success(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+    def manage_success(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del state, runtime, log, source, sink
 
     harness.process_case("process.manage.success", "manage", manage_success)
 
-    def manage_failure(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
+    def manage_failure(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
         del state, runtime, log, source, sink
         return {"LITE_HERDR_FAIL": "1", "LITE_HERDR_STDERR": "manager open failed"}
 
     harness.process_case("process.manage.failure", "manage", manage_failure)
 
-    def manage_failure_without_stderr(
-        _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+    def manage_failure_without_stderr(state: Path, runtime: Path, log: Path, source: Path, sink: Path
     ) -> Mapping[str, str]:
         del state, runtime, log, source, sink
         return {"LITE_HERDR_FAIL": "1", "LITE_HERDR_STDERR": ""}
@@ -1213,21 +1181,20 @@ def run_process_layer(harness: Harness) -> None:
         "process.manage.failure-without-stderr", "manage", manage_failure_without_stderr
     )
 
-    def manage_missing_root(
-        _impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path
+    def manage_missing_root(state: Path, runtime: Path, log: Path, source: Path, sink: Path
     ) -> Mapping[str, str]:
         del state, runtime, log, source, sink
         return {"HERDR_PLUGIN_ROOT": ""}
 
     harness.process_case("process.manage.missing-root", "manage", manage_missing_root)
 
-    def editor_missing(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
+    def editor_missing(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> None:
         del runtime, log, source, sink
         state.mkdir()
 
     harness.process_case("process.editor.missing-pending", "editor", editor_missing)
 
-    def editor_invalid(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
+    def editor_invalid(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
         del runtime, log, source, sink
         state.mkdir()
         pending = state / "invalid-pending.json"
@@ -1236,7 +1203,7 @@ def run_process_layer(harness: Harness) -> None:
 
     harness.process_case("process.editor.invalid-pending", "editor", editor_invalid)
 
-    def manager_missing(_impl: str, state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
+    def manager_missing(state: Path, runtime: Path, log: Path, source: Path, sink: Path) -> Mapping[str, str]:
         del state, runtime, log, source, sink
         return {"HERDR_PLUGIN_STATE_DIR": ""}
 
@@ -1290,7 +1257,7 @@ def empty_manager_seed(state: Path) -> None:
     state.mkdir(parents=True, mode=0o700)
 
 
-def pending_file_extra(_implementation: str, state: Path) -> Mapping[str, str]:
+def pending_file_extra(state: Path) -> Mapping[str, str]:
     pending = state / "pending-input.json"
     pending.write_text(
         json.dumps(
@@ -1885,14 +1852,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="rewrite the goldens from this run, for a deliberate behavior change",
     )
-    parser.add_argument(
-        "--from-bun",
-        action="store_true",
-        help="record from the retired Bun runtime instead of the native binary",
-    )
     arguments = parser.parse_args()
-    if arguments.from_bun and not arguments.record:
-        parser.error("--from-bun only records; pass --record")
     if arguments.goldens is None:
         arguments.goldens = Path(__file__).resolve().parent / "lite-goldens"
     return arguments
@@ -1904,14 +1864,8 @@ def main() -> int:
     workspace = Path(tempfile.mkdtemp(prefix="herdr-annotate-lite-"))
     goldens = Goldens(args.goldens.resolve(), workspace / "artifacts", record=args.record)
     try:
-        harness = Harness(
-            args.root.resolve(),
-            args.binary.resolve(),
-            "bun" if args.from_bun else "native",
-            workspace,
-            goldens,
-        )
-        print(f"== process layer ({harness.implementation})")
+        harness = Harness(args.root.resolve(), args.binary.resolve(), workspace, goldens)
+        print("== process layer")
         run_process_layer(harness)
         print("== screen and store layers")
         editor_state = run_screen_and_store_layer(harness)

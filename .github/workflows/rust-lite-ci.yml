@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - "rust/**"
-      - "src/**"
       - "lite/**"
       - "herdr-plugin.toml"
       - "docs/rust-lite-parity-proof.md"

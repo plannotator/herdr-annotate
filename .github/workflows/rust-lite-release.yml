@@ -16,7 +16,7 @@ jobs:
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' rust/Cargo.toml | head -1)
           test "rust-lite-v$version" = "${GITHUB_REF_NAME}"
-          test "$version" = "$(tr -d '[:space:]' < lite-rs/herdr-annotate.version)"
+          test "$version" = "$(tr -d '[:space:]' < herdr-annotate.version)"
 
   build:
     needs: verify

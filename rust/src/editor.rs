@@ -224,7 +224,7 @@ impl EditorApp {
         false
     }
 
-    /// Apply a word or line action, mirroring the `resolveEditKey` branches in `src/editor.ts`.
+    /// Apply a word or line action, mirroring the retired Bun editor's `resolveEditKey` branches.
     fn apply_edit_action(&mut self, action: EditAction) {
         match action {
             EditAction::WordLeft => self.cursor = word_start(&self.comment, self.cursor),
