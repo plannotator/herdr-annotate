@@ -41,7 +41,7 @@ try {
   if (-not $line) { throw "$asset is not listed in $base/SHA256SUMS" }
   $expected = ($line -split "\s+")[0].ToLowerInvariant()
   $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $temporary $asset)).Hash.ToLowerInvariant()
-  if ($actual -ne $expected) { throw "sha256 mismatch for $asset: expected $expected, got $actual" }
+  if ($actual -ne $expected) { throw "sha256 mismatch for ${asset}: expected $expected, got $actual" }
   Copy-Item -Force (Join-Path $temporary $asset) "$destination.tmp"
   Move-Item -Force "$destination.tmp" $destination
   Set-Content -NoNewline $stamp $version
