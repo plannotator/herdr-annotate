@@ -59,7 +59,10 @@ BUN_SCRIPTS = {
     "manager": "manager.ts",
 }
 ENTRYPOINTS = tuple(sorted(BUN_SCRIPTS))
+# The Full manifest at the repository root starts the binary in its own bin/; the Lite variant
+# in lite/ shares that one staged binary, the way it shared the Bun sources.
 NATIVE_PROGRAM = "./bin/herdr-annotate.exe"
+LITE_NATIVE_PROGRAM = "../bin/herdr-annotate.exe"
 PENDING_PATTERN = re.compile(r"pending-\d+-\d+\.json")
 TEMP_PATTERN = re.compile(r"\.(annotations|archives)-\d+-\d+\.tmp")
 HANDOFF_PATTERN = re.compile(r"herdr-annotate-\d+")
@@ -1829,7 +1832,7 @@ def verify_manifests(root: Path, goldens: Goldens) -> None:
             goldens.equal(
                 f"manifest.{table}.{identifier}.command",
                 (
-                    [NATIVE_PROGRAM, identifier],
+                    [LITE_NATIVE_PROGRAM, identifier],
                     [part.replace("../src/", "src/") for part in lite_command],
                 ),
                 (native_entry.get("command"), full_entry.get("command")),

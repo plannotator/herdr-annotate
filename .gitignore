@@ -3,5 +3,3 @@ node_modules/
 bin/*
 !bin/.gitkeep
 /rust/target/
-/lite-rs/bin/*
-!/lite-rs/bin/.gitkeep

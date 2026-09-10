@@ -52,9 +52,9 @@ restore() {
 trap restore EXIT
 
 echo "== build native Lite"
-bash "$root/lite-rs/scripts/stage-local.sh" >/dev/null
+bash "$root/scripts/stage-local.sh" >/dev/null
 binary="$root/rust/target/release/herdr-annotate"
-check "binary version" "$("$binary" --version)" "herdr-annotate $(tr -d '[:space:]' < "$root/lite-rs/herdr-annotate.version")"
+check "binary version" "$("$binary" --version)" "herdr-annotate $(tr -d '[:space:]' < "$root/herdr-annotate.version")"
 
 echo "== link native manifest"
 herdr plugin link "$root/lite-rs" >/dev/null
@@ -69,7 +69,7 @@ import json,sys
 p=json.load(sys.stdin)
 print(",".join(sorted(a["command"][0] for a in p["actions"])))')"
 check "native action commands" "$commands" "./bin/herdr-annotate.exe,./bin/herdr-annotate.exe,./bin/herdr-annotate.exe,./bin/herdr-annotate.exe"
-check "bundled binary" "$("$root/lite-rs/bin/herdr-annotate.exe" --version)" "herdr-annotate $(tr -d '[:space:]' < "$root/lite-rs/herdr-annotate.version")"
+check "bundled binary" "$("$root/bin/herdr-annotate.exe" --version)" "herdr-annotate $(tr -d '[:space:]' < "$root/herdr-annotate.version")"
 
 echo "== manager pane renders in $HERDR_SESSION"
 herdr plugin pane open --plugin annotate --entrypoint manager --placement overlay --focus >/dev/null

@@ -12,9 +12,9 @@ for command in cargo python3; do
 done
 
 echo "== stage the native runtime"
-bash "$root/lite-rs/scripts/stage-local.sh" >/dev/null
+bash "$root/scripts/stage-local.sh" >/dev/null
 
 exec python3 "$root/scripts/lite-regression.py" \
   --root "$root" \
-  --binary "$root/lite-rs/bin/herdr-annotate.exe" \
+  --binary "$root/bin/herdr-annotate.exe" \
   "$@"
