@@ -4,10 +4,13 @@ on:
   pull_request:
     paths:
       - "herdr-plugin.toml"
+      - "herdr-annotate.version"
       - "plannotator-tui.version"
+      - "scripts/fetch-herdr-annotate.*"
       - "scripts/fetch-plannotator-tui.*"
       - "scripts/plannotator-tui.sh"
       - "scripts/smoke.sh"
+      - "scripts/test-fetch-herdr-annotate.*"
       - "scripts/test-fetch-plannotator-tui.*"
       - "scripts/test-herdr-windows-plugin.ps1"
       - "scripts/test-http-server.py"
@@ -33,6 +36,8 @@ jobs:
           python-version: "3.11"
       - name: local override and idempotence
         run: ./scripts/test-fetch-plannotator-tui.ps1 -Case LocalOverride
+      - name: native lite local override and idempotence
+        run: ./scripts/test-fetch-herdr-annotate.ps1 -Case LocalOverride
       - name: loopback download and checksum preservation
         run: ./scripts/test-fetch-plannotator-tui.ps1 -Case Download
       - uses: actions/checkout@v4
@@ -59,3 +64,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash scripts/test-fetch-plannotator-tui.sh
+      - run: bash scripts/test-fetch-herdr-annotate.sh
