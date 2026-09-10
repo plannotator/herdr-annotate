@@ -19,6 +19,10 @@ separately so test coverage is not confused with behavior observed inside Herdr.
 - [x] `editor.ts` → `herdr-annotate editor`: pending-file and invocation-context fallback, delete-on-
   successful-read behavior, multiline Unicode editing, wide-cell cursor layout, Ctrl+S validation,
   save delay, Esc/Ctrl+C cancellation, raw terminal restoration.
+- [x] `edit-keys.ts` → `rust/src/edit_keys.rs`: the same `wordStart`/`wordEnd`/`lineStart`/`lineEnd`
+  boundaries, including JavaScript's `\s` class, one-step newline crossing, and CJK runs as single
+  words; the same key map for Option/Alt and Ctrl arrows, Command/Super arrows, Alt+B/Alt+F,
+  Ctrl+A/Ctrl+E, and the Ctrl+W/Alt+Backspace/Ctrl+U kills.
 - [x] `manager.ts` → `herdr-annotate manager`: active/archive views, newest-first lists, detail panes,
   navigation, copy one/all, copy-and-archive, delete, double-confirm clear, restore, double-confirm
   permanent archive deletion, reload, status messages, Esc/Tab/q/Ctrl+C behavior. Every pane copy also
@@ -65,6 +69,7 @@ document-anchor/API wire shape, not Lite's existing terminal-selection JSONL sha
 | `test/format.test.ts` | `format::tests` plus malformed-boundary store/type tests |
 | `test/width.test.ts` | `width::tests` (3 grouped tests covering every assertion) |
 | `test/layout.test.ts` | `layout::tests` (3 grouped tests covering every assertion) |
+| `test/edit-keys.test.ts` | `edit_keys::tests` (14 tests, including the JavaScript whitespace class) |
 | `test/store.test.ts` | `store::tests` (6 tests) |
 | `test/archive-workflow.test.ts` | `archive_workflow::tests` (8 tests) |
 | `test/export-archive.test.ts` | `cli::tests::copy_archive_maps_every_outcome_to_its_notification_and_exit_status` |
@@ -73,7 +78,8 @@ document-anchor/API wire shape, not Lite's existing terminal-selection JSONL sha
 
 Additional Rust-only coverage:
 
-- `editor::tests`: headless 86×22 `TestBackend` frame, Unicode edit keys, empty-save validation, quit.
+- `editor::tests`: headless 86×22 `TestBackend` frame, Unicode edit keys, word/line moves and kills
+  wired through `handle_key`, empty-save validation, quit.
 - `manager::tests`: headless 98×28 active/archive frames, newest-first detail, exact TypeScript detail
   width at the clipping boundary, confirmation, real clear.
 - `rust/tests/commands.rs`: subprocess-level capture/manage/copy-context commands with a fake Herdr,

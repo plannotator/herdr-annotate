@@ -13,6 +13,7 @@ use ratatui::widgets::{Clear, Paragraph};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::edit_keys::{EditAction, line_end, line_start, resolve_edit_key, word_end, word_start};
 use crate::format::{sanitize_terminal_text, wrap_text};
 use crate::layout::layout_comment;
 use crate::paths::state_dir;
@@ -177,6 +178,10 @@ impl EditorApp {
         if key.code == KeyCode::Char('s') && key.modifiers.contains(KeyModifiers::CONTROL) {
             return true;
         }
+        if let Some(action) = resolve_edit_key(&key) {
+            self.apply_edit_action(action);
+            return false;
+        }
         match key.code {
             KeyCode::Esc => self.quit = true,
             KeyCode::Backspace => {
@@ -217,6 +222,26 @@ impl EditorApp {
             _ => {}
         }
         false
+    }
+
+    /// Apply a word or line action, mirroring the `resolveEditKey` branches in `src/editor.ts`.
+    fn apply_edit_action(&mut self, action: EditAction) {
+        match action {
+            EditAction::WordLeft => self.cursor = word_start(&self.comment, self.cursor),
+            EditAction::WordRight => self.cursor = word_end(&self.comment, self.cursor),
+            EditAction::LineStart => self.cursor = line_start(&self.comment, self.cursor),
+            EditAction::LineEnd => self.cursor = line_end(&self.comment, self.cursor),
+            EditAction::DeleteWord => {
+                let start = word_start(&self.comment, self.cursor);
+                self.comment.drain(start..self.cursor);
+                self.cursor = start;
+            }
+            EditAction::DeleteLine => {
+                let start = line_start(&self.comment, self.cursor);
+                self.comment.drain(start..self.cursor);
+                self.cursor = start;
+            }
+        }
     }
 
     fn insert(&mut self, character: char) {
@@ -438,6 +463,59 @@ mod tests {
         let mut empty = app();
         assert!(!empty.save(None));
         assert_eq!(empty.status, "Write a comment before saving.");
+    }
+
+    #[test]
+    fn word_and_line_keys_match_the_typescript_editor() {
+        let mut editor = app();
+        for character in "alpha beta".chars() {
+            editor.handle_key(KeyEvent::from(KeyCode::Char(character)));
+        }
+        editor.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
+        assert_eq!(editor.cursor, 6);
+        editor.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT));
+        assert_eq!(editor.cursor, 0);
+        editor.handle_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::ALT));
+        assert_eq!(editor.cursor, 5);
+        editor.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL));
+        assert_eq!(editor.cursor, 10);
+        editor.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SUPER));
+        assert_eq!(editor.cursor, 0);
+        editor.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SUPER));
+        assert_eq!(editor.cursor, 10);
+        editor.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
+        assert_eq!(editor.cursor, 0);
+        editor.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL));
+        assert_eq!(editor.cursor, 10);
+        editor.handle_key(KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL));
+        assert_eq!(editor.comment.iter().collect::<String>(), "alpha ");
+        assert_eq!(editor.cursor, 6);
+        editor.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::ALT));
+        assert_eq!(editor.comment.iter().collect::<String>(), "");
+        assert_eq!(editor.cursor, 0);
+    }
+
+    #[test]
+    fn delete_line_kills_only_the_current_line() {
+        let mut editor = app();
+        for character in "one two".chars() {
+            editor.handle_key(KeyEvent::from(KeyCode::Char(character)));
+        }
+        editor.handle_key(KeyEvent::from(KeyCode::Enter));
+        for character in "한글 three".chars() {
+            editor.handle_key(KeyEvent::from(KeyCode::Char(character)));
+        }
+        editor.handle_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
+        assert_eq!(editor.comment.iter().collect::<String>(), "one two\n");
+        assert_eq!(editor.cursor, 8);
+        editor.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
+        assert_eq!(editor.cursor, 7);
+        editor.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
+        assert_eq!(editor.cursor, 4);
+        editor.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
+        assert_eq!(editor.cursor, 7);
+        editor.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
+        assert_eq!(editor.cursor, 8);
     }
 
     #[test]

@@ -5,7 +5,7 @@ TypeScript Lite surface to the Rust call path at function granularity and names 
 case that compares the result. The current local result is:
 
 ```text
-Parity Lite: 510 observables compared, 94 screens diffed, zero divergences / 1 deliberate
+Parity Lite: 622 observables compared, 145 screens diffed, zero divergences / 1 deliberate
 ```
 
 Run it from the repository root with `bash scripts/parity-lite.sh`. The shell wrapper stages a fresh
@@ -94,10 +94,10 @@ contract: success and blank input exit 0; a defined failure produces one stderr 
 
 | Observable decision or effect | TypeScript call path | Rust call path | Mechanical evidence |
 |---|---|---|---|
-| Manifest and pending selection | `lite/herdr-plugin.toml:46` → top-level `src/editor.ts:17`. `invocationContext` at `:20`; pending-file parse at `:34`; fallback `pendingAnnotationFromInvocation` at `src/types.ts:65`; parsed-file canonicalization at `src/types.ts:79`. | `lite-rs/herdr-plugin.toml:56` → dispatcher → `editor::run` at `rust/src/editor.rs:346`; `pending_from_env` at `:320`; invocation fallback and pending parsing at `rust/src/types.rs:107` and `:119`. | Missing/invalid process cases; `screen.editor.pending-file-save`; the other editor PTY cases use invocation fallback. |
-| Terminal and screen | `render` at `src/editor.ts:77` uses `sanitizeTerminalText`, `wrapText`, `layoutComment`, and width helpers; alternate-screen setup is `:207`. | `EditorApp::draw` at `rust/src/editor.rs:67` calls the corresponding helpers at `rust/src/format.rs:7`/`:26`, `rust/src/layout.rs:14`, and `rust/src/width.rs:35`; `editor::run` owns the Ratatui terminal. | Initial frame and every frame in `screen.editor.*`; fixed 86×22 cells include wide Hangul. |
-| Input and save | Key dispatch is `src/editor.ts:172`; vertical movement is `:52`; `save` is `:122`; successful save renders, waits 250 ms, and exits. | `EditorApp::handle_key` at `rust/src/editor.rs:168`; vertical movement at `:227`; `save` at `:253`; `run` at `:346` renders the saved state, waits 250 ms, and exits. | `screen.editor.edit-save`, empty-save, missing-state, Esc, and Ctrl+C cases. Store bytes are compared after save. |
-| Cleanup and signals | `cleanup`/`exit` at `src/editor.ts:110`/`:117`; SIGTERM/SIGHUP handlers at `:160`. | `Termination::install`/`requested` at `rust/src/termination.rs:17`/`:33`; the polling loop at `rust/src/editor.rs:346` reaches `ratatui::restore`. | `screen.editor.sigterm` compares exit 0 and the restored terminal grid. |
+| Manifest and pending selection | `lite/herdr-plugin.toml:46` → top-level `src/editor.ts:17`. `invocationContext` at `:20`; pending-file parse at `:34`; fallback `pendingAnnotationFromInvocation` at `src/types.ts:65`; parsed-file canonicalization at `src/types.ts:79`. | `lite-rs/herdr-plugin.toml:56` → dispatcher → `editor::run` at `rust/src/editor.rs:371`; `pending_from_env` at `:345`; invocation fallback and pending parsing at `rust/src/types.rs:107` and `:119`. | Missing/invalid process cases; `screen.editor.pending-file-save`; the other editor PTY cases use invocation fallback. |
+| Terminal and screen | `render` at `src/editor.ts:77` uses `sanitizeTerminalText`, `wrapText`, `layoutComment`, and width helpers; alternate-screen setup is `:207`. | `EditorApp::draw` at `rust/src/editor.rs:68` calls the corresponding helpers at `rust/src/format.rs:7`/`:26`, `rust/src/layout.rs:14`, and `rust/src/width.rs:35`; `editor::run` owns the Ratatui terminal. | Initial frame and every frame in `screen.editor.*`; fixed 86×22 cells include wide Hangul. |
+| Input and save | Key dispatch is `src/editor.ts:172`, with `resolveEditKey` consulted at `:181` before the single-character arm; vertical movement is `:52`; `save` is `:122`; successful save renders, waits 250 ms, and exits. | `EditorApp::handle_key` at `rust/src/editor.rs:169`, with `resolve_edit_key` consulted at `:181` and applied by `apply_edit_action` at `:228`; vertical movement at `:252`; `save` at `:278`; `run` at `:371` renders the saved state, waits 250 ms, and exits. | `screen.editor.edit-save`, empty-save, missing-state, Esc, and Ctrl+C cases. Store bytes are compared after save. |
+| Cleanup and signals | `cleanup`/`exit` at `src/editor.ts:110`/`:117`; SIGTERM/SIGHUP handlers at `:160`. | `Termination::install`/`requested` at `rust/src/termination.rs:17`/`:33`; the polling loop at `rust/src/editor.rs:371` reaches `ratatui::restore`. | `screen.editor.sigterm` compares exit 0 and the restored terminal grid. |
 
 ### `manager`
 
@@ -112,21 +112,44 @@ contract: success and blank input exit 0; a defined failure produces one stderr 
 ## Every editor key
 
 All key paths clear the prior status before acting. TypeScript dispatch is `src/editor.ts:172`;
-Rust dispatch is `EditorApp::handle_key` at `rust/src/editor.rs:168`; both render again after the
+Rust dispatch is `EditorApp::handle_key` at `rust/src/editor.rs:169`; both render again after the
 transition.
 
 | Key | TypeScript → Rust call path | Required state/store/screen effect | Harness step |
 |---|---|---|---|
-| Character input, including wide text | `src/editor.ts:199` uses `Array.from` and `splice` → `rust/src/editor.rs:210` calls `insert` at `:222`. | Insert Unicode scalar(s) at cursor, advance by character count, render using cell width. | `screen.editor.edit-save`: `chars`, `chars-second-line`. |
-| Enter | `src/editor.ts:196` → Rust `KeyCode::Enter` at `rust/src/editor.rs:209` → `insert`. | Insert `\n`, move cursor, preserve explicit blank/line layout. | `enter`. |
-| Backspace | `src/editor.ts:180` → `rust/src/editor.rs:182`. | If cursor > 0, remove the character before it and move left; otherwise no change. | `backspace`. |
-| Delete | `src/editor.ts:182` → `rust/src/editor.rs:188`. | Remove the character at cursor if present; cursor stays. | `delete`. |
-| Left / Right | `src/editor.ts:184`/`:186` → `rust/src/editor.rs:193`/`:194`. | Move one character, clamped to `[0, length]`. | `left`, `right`. |
-| Up / Down | `moveCursorVertical` at `src/editor.ts:52` → `move_cursor_vertical` at `rust/src/editor.rs:227`. | Preserve terminal-cell column as closely as possible on the adjacent line; clamp first/last row and never split a wide glyph. | `up`, `down`. |
-| Home / End | `src/editor.ts:192`/`:194` → `rust/src/editor.rs:197`/`:202`. | Move to start/end of the current logical line. | `home`, `end`. |
-| Ctrl+S | `src/editor.ts:175` → `save` at `:122`; Rust control branch at `rust/src/editor.rs:177` → `save` at `:253`. | Blank comment: `Write a comment before saving.` and remain. Missing state: `Plugin state directory is unavailable.` and remain. Store error: display it and remain. Success: append exact JSONL, display `Saved.`, wait 250 ms, cleanly exit 0. | `screen.editor.edit-save`, `empty-save-escape`, `missing-state`. |
-| Esc | `src/editor.ts:179` → `exit`/`cleanup`; Rust `rust/src/editor.rs:181` sets quit and `run` restores. | No store write; cursor shown, screen restored, exit 0. | `screen.editor.empty-save-escape`. |
-| Ctrl+C | `src/editor.ts:174` → `exit`/`cleanup`; Rust `rust/src/editor.rs:173` sets quit. | Same cancellation effect as Esc. | `screen.editor.control-c`. |
+| Character input, including wide text | `src/editor.ts:199` uses `Array.from` and `splice` → `rust/src/editor.rs:215` calls `insert` at `:247`. | Insert Unicode scalar(s) at cursor, advance by character count, render using cell width. | `screen.editor.edit-save`: `chars`, `chars-second-line`. |
+| Enter | `src/editor.ts:196` → Rust `KeyCode::Enter` at `rust/src/editor.rs:214` → `insert`. | Insert `\n`, move cursor, preserve explicit blank/line layout. | `enter`. |
+| Backspace | `src/editor.ts:180` → `rust/src/editor.rs:187`. | If cursor > 0, remove the character before it and move left; otherwise no change. | `backspace`. |
+| Delete | `src/editor.ts:182` → `rust/src/editor.rs:193`. | Remove the character at cursor if present; cursor stays. | `delete`. |
+| Left / Right | `src/editor.ts:184`/`:186` → `rust/src/editor.rs:198`/`:199`. | Move one character, clamped to `[0, length]`. | `left`, `right`. |
+| Up / Down | `moveCursorVertical` at `src/editor.ts:52` → `move_cursor_vertical` at `rust/src/editor.rs:252`. | Preserve terminal-cell column as closely as possible on the adjacent line; clamp first/last row and never split a wide glyph. | `up`, `down`. |
+| Home / End | `src/editor.ts:192`/`:194` → `rust/src/editor.rs:202`/`:207`. | Move to start/end of the current logical line. | `home`, `end`. |
+| Word left (Option/Alt+Left, Ctrl+Left, Alt+B) | `resolveEditKey` at `src/edit-keys.ts:53` → `wordStart` at `:16`, applied at `src/editor.ts:182`. | `resolve_edit_key` at `rust/src/edit_keys.rs:111` → `word_start` at `:56`, applied at `rust/src/editor.rs:230`. | Skip whitespace back to the previous word start; a newline is crossed by itself in one step; a CJK run is one word. | `screen.editor.word-line-moves`: `alt-left`, `alt-b`, `ctrl-left`, `alt-left-word`, `alt-left-previous-word`, `alt-left-line-first-word`, `alt-left-over-newline`. |
+| Word right (Option/Alt+Right, Ctrl+Right, Alt+F) | `resolveEditKey` at `src/edit-keys.ts:53` → `wordEnd` at `:25`, applied at `src/editor.ts:184`. | `resolve_edit_key` at `rust/src/edit_keys.rs:111` → `word_end` at `:71`, applied at `rust/src/editor.rs:231`. | Skip whitespace forward to the next word end; a newline is crossed by itself in one step. | `screen.editor.word-line-moves`: `alt-f`, `alt-right`, `ctrl-right`, `alt-right-over-newline`, `alt-right-next-word`. |
+| Line start (Command/Super+Left, Ctrl+A) | `resolveEditKey` at `src/edit-keys.ts:53` (xterm modifier 9 via the raw sequence) → `lineStart` at `:33`, applied at `src/editor.ts:186`. | `resolve_edit_key` at `rust/src/edit_keys.rs:111` (`KeyModifiers::SUPER`) → `line_start` at `:86`, applied at `rust/src/editor.rs:232`. | Move to the first character of the current logical line without crossing the newline. | `screen.editor.word-line-moves`: `super-left`, `ctrl-a`. |
+| Line end (Command/Super+Right, Ctrl+E) | `resolveEditKey` at `src/edit-keys.ts:53` → `lineEnd` at `:39`, applied at `src/editor.ts:188`. | `resolve_edit_key` at `rust/src/edit_keys.rs:111` → `line_end` at `:95`, applied at `rust/src/editor.rs:233`. | Move to the end of the current logical line without crossing the newline. | `screen.editor.word-line-moves`: `super-right`, `ctrl-e`. |
+| Delete word (Ctrl+W, Alt/Option+Backspace) | `src/editor.ts:190` splices `wordStart(comment, cursor)..cursor`. | `rust/src/editor.rs:234` drains `word_start(..)..cursor`. | Kill back to the word start and leave the cursor there; at a line start the kill takes only the newline. | `screen.editor.word-line-kills`: `ctrl-w`, `alt-backspace-marker`, `alt-backspace-word`, `alt-backspace-newline`. |
+| Delete line (Ctrl+U) | `src/editor.ts:194` splices `lineStart(comment, cursor)..cursor`. | `rust/src/editor.rs:239` drains `line_start(..)..cursor`. | Kill back to the line start and leave the cursor there; at a line start it removes nothing. | `screen.editor.word-line-kills`: `ctrl-u`, `ctrl-u-at-line-start`. |
+| Ctrl+S | `src/editor.ts:175` → `save` at `:122`; Rust control branch at `rust/src/editor.rs:178` → `save` at `:278`. | Blank comment: `Write a comment before saving.` and remain. Missing state: `Plugin state directory is unavailable.` and remain. Store error: display it and remain. Success: append exact JSONL, display `Saved.`, wait 250 ms, cleanly exit 0. | `screen.editor.edit-save`, `empty-save-escape`, `missing-state`. |
+| Esc | `src/editor.ts:179` → `exit`/`cleanup`; Rust `rust/src/editor.rs:186` sets quit and `run` restores. | No store write; cursor shown, screen restored, exit 0. | `screen.editor.empty-save-escape`. |
+| Ctrl+C | `src/editor.ts:174` → `exit`/`cleanup`; Rust `rust/src/editor.rs:174` sets quit. | Same cancellation effect as Esc. | `screen.editor.control-c`. |
+
+### How each runtime decodes the word and line modifiers
+
+The two runtimes reach the same action from different modifier models, so the mapping is stated here
+rather than inferred.
+
+- Node's readline folds xterm modifiers 3 and 9 into a single `key.meta` flag (`modifier & 10`), so
+  `src/edit-keys.ts:54` inspects the raw sequence with `/;9[A-Z~]$/` to tell Command from Option.
+- Crossterm's `parse_modifiers` subtracts one and reads the result as a bit set, so modifier 3 is
+  `KeyModifiers::ALT` and modifier 9 is `KeyModifiers::SUPER`. `KeyModifiers::META` is bit 32, which
+  is modifier 33, never Command, so `rust/src/edit_keys.rs:111` gates line moves on `SUPER` alone.
+- Crossterm parses an `ESC`-prefixed byte as the following event with `ALT` folded in, so `\x1bb` is
+  `Char('b')` plus `ALT` and `\x1b\x7f` is `Backspace` plus `ALT`, matching Node's `meta` forms.
+- Word boundaries use JavaScript's `\s` class, not `char::is_whitespace`. The two sets differ at
+  U+0085 and U+FEFF, so `is_javascript_whitespace` at `rust/src/edit_keys.rs:30` spells the
+  TypeScript set out and `edit_keys::tests::javascript_whitespace_matches_the_typescript_class`
+  pins both scalars.
 
 ## Every manager key in both views
 
@@ -166,7 +189,7 @@ also fed by `screen.manager.all-views`.
 |---|---|---|---|
 | State directory creation | `fs.mkdirSync(..., {recursive:true})` at `src/capture.ts:42` and `withStoreLock` at `src/store.ts:196`. | `create_dir_all` at `rust/src/cli.rs:84` and `create_private_dir_all` at `rust/src/store.rs:392`. | Process-default directory mode (0755 under harness umask 022), not forced 0700. `process.copy.empty` compares the directory mode. |
 | Pending file | `src/capture.ts:44`/`:49`/`:52`. | `rust/src/cli.rs:85`/`:92` and `write_pending` at `:247`. | Name `pending-<epoch-ms>-<pid>.json`; mode 0600 on creation; bytes are one JSON object plus `\n`; property order `selectedText`, `context`, `capturedAt`. Capture cases byte/mode-diff it. |
-| Pending consumption | `src/editor.ts:34` reads/parses, then `fs.rmSync(...,{force:true})` at `:39`. | `pending_from_env` at `rust/src/editor.rs:320`, then `remove_pending_file` at `:337`. | Delete only after successful read and semantic parse; missing-at-delete is ignored; other deletion errors fail startup. `screen.editor.pending-file-save` compares the consumed tree and saved JSONL; Rust regression `pending_removal_is_forceful_like_typescript` pins the delete race. |
+| Pending consumption | `src/editor.ts:34` reads/parses, then `fs.rmSync(...,{force:true})` at `:39`. | `pending_from_env` at `rust/src/editor.rs:345`, then `remove_pending_file` at `:362`. | Delete only after successful read and semantic parse; missing-at-delete is ignored; other deletion errors fail startup. `screen.editor.pending-file-save` compares the consumed tree and saved JSONL; Rust regression `pending_removal_is_forceful_like_typescript` pins the delete race. |
 | Handoff take | `handoffPath`/`takeHandoff` at `src/handoff.ts:17`/`:24`. | `handoff_path`/`take_handoff` at `rust/src/handoff.rs:12`/`:32`. | `$XDG_RUNTIME_DIR` else temp + `herdr-annotate-<uid>/selection`; missing/stat failure means absent; regular files ≤15 s old are decoded as UTF-8 with replacement; stale and blank values are rejected; every found node is removed; non-NotFound removal failure propagates. Context-skipped handoff remains. Capture handoff cases diff pending bytes and the runtime tree. |
 | Active append | `appendAnnotation` at `src/store.ts:42`. | `append_annotation` / `append_annotation_context_first` at `rust/src/store.rs:77`/`:82`, sharing `append_annotation_record` at `:97`. | Append one compact JSON object plus `\n`; mode 0600 on creation. Capture-file editor order is `selectedText,capturedAt,context,id,comment,createdAt`; direct invocation fallback preserves TypeScript's distinct `selectedText,context,capturedAt,id,comment,createdAt`. `screen.editor.pending-file-save.state` and `screen.editor.edit-save.state` byte-diff both orders; two Rust regressions pin them. |
 | JSONL read | `loadJsonLines` at `src/store.ts:150` and parsers at `src/types.ts:92`/`:103`. | `load_json_lines` at `rust/src/store.rs:227` and parsers at `rust/src/types.rs:133`/`:145`. | Missing file = empty; empty lines skipped; any malformed/nonconforming non-empty line rejects the whole store; unknown fields tolerated by parsers. Invalid-store and paired unit cases cover both stores. |
@@ -269,10 +292,10 @@ the prefix exactly as shown.
 | `HERDR_PLUGIN_STATE_DIR is not set` | `src/capture.ts:22`, `src/export.ts:9`, `src/export-archive.ts:48`, `src/manager.ts:33` | `rust/src/cli.rs:69`/`:125`/`:185`, `rust/src/manager.rs:725` | Missing-state process cases. |
 | `HERDR_PLUGIN_ROOT is not set` | `src/capture.ts:24`, `src/open-manager.ts:7` | `rust/src/cli.rs:70`/`:215` | Missing-root cases. |
 | `No supported clipboard reader is available` | `src/clipboard.ts:59` | `rust/src/clipboard.rs:106` | `process.capture.no-clipboard`. |
-| `Missing pending annotation` | `src/editor.ts:32` | `rust/src/editor.rs:326` | `process.editor.missing-pending`. |
-| `Pending annotation is invalid` | `src/editor.ts:37` | `rust/src/editor.rs:332` | `process.editor.invalid-pending`. |
-| `Write a comment before saving.` | `src/editor.ts:125` | `rust/src/editor.rs:256` | Editor empty-save frame. |
-| `Plugin state directory is unavailable.` | `src/editor.ts:131` | `rust/src/editor.rs:260` | Editor missing-state frame. |
+| `Missing pending annotation` | `src/editor.ts:32` | `rust/src/editor.rs:351` | `process.editor.missing-pending`. |
+| `Pending annotation is invalid` | `src/editor.ts:37` | `rust/src/editor.rs:357` | `process.editor.invalid-pending`. |
+| `Write a comment before saving.` | `src/editor.ts:125` | `rust/src/editor.rs:281` | Editor empty-save frame. |
+| `Plugin state directory is unavailable.` | `src/editor.ts:131` | `rust/src/editor.rs:285` | Editor missing-state frame. |
 | `Unable to save annotation[ (<CODE>)]` | `src/store.ts:48` | `rust/src/store.rs:100` | Store error catalog and paired store/editor tests. |
 | `Unable to read annotations (invalid data)` / `Unable to read archives (invalid data)` | `src/store.ts:163`/`:166` | `rust/src/store.rs:245`/`:247` | Invalid active process case and paired active/archive tests. |
 | `Unable to read annotations (<CODE>)` / `Unable to read archives (<CODE>)` | `src/store.ts:171` | `rust/src/store.rs:235`/`:240` | Source/error catalog; OS-specific access cases remain unit-level. |
@@ -314,6 +337,11 @@ Notable differential groups:
   declared entrypoint.
 - `process.manage.*`, `process.editor.*`, `process.manager.*`: argv/error fallback and initialization.
 - `screen.editor.*`: both pending sources, every requested edit key, save branches, cancel keys, and SIGTERM.
+  `screen.editor.word-line-moves` and `screen.editor.word-line-kills` send the raw byte sequence for
+  each word/line key (`\x1b[1;3D`, `\x1b[1;3C`, `\x1b[1;5D`, `\x1b[1;5C`, `\x1b[1;9D`, `\x1b[1;9C`,
+  `\x1bb`, `\x1bf`, `\x1b\x7f`, `\x17`, `\x15`, `\x01`, `\x05`) and type a marker character after
+  each one, because a compared screen holds cells and not the cursor. The saved store bytes are the
+  record of where both runtimes put the cursor.
 - `screen.manager.*`: both views, every view-valid key, ignored cross-view keys by handler mapping,
   both confirmation flows, empty actions, exit keys, and SIGHUP.
 - `store.manager.*`: successful clipboard-only and copy/archive products; the three

@@ -2,6 +2,7 @@
 
 pub mod archive_workflow;
 pub mod clipboard;
+pub mod edit_keys;
 pub mod editor;
 pub mod format;
 pub mod handoff;
