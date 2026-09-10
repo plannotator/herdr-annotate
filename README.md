@@ -17,16 +17,17 @@ Annotate inside [Herdr](https://github.com/herdrdev/herdr): comment on any termi
 ## Requirements
 
 - Herdr 0.8.0 or later
-- [Bun](https://bun.sh/)
 - macOS, Linux, or Windows
+
+There is no runtime to install. Both installs download a small prebuilt `herdr-annotate` binary and verify its SHA-256 checksum.
 
 On Linux, install `wl-clipboard`, `xclip`, or `xsel` for clipboard access.
 
-On Windows, native Herdr plugin support is preview/best-effort. Bun must be on `PATH`. Clipboard access uses PowerShell; no extra clipboard package is required. The install, keybinding, configuration check, reload, and use instructions below also apply on Windows.
+On Windows, native Herdr plugin support is preview/best-effort. Clipboard access uses PowerShell; no extra clipboard package is required. The install, keybinding, configuration check, reload, and use instructions below also apply on Windows.
 
 ## Install
 
-Pick one. Installing the other later just swaps it (same plugin id).
+Pick one. Installing the other later just swaps it (same plugin id). An install stays on the commit it came from; run the same command again to move to the current release.
 
 <img src="assets/install-full.svg" width="200" align="left" alt="Full">
 
@@ -211,20 +212,28 @@ Herdr Annotate reads text that Herdr copies to the system clipboard. The plugin 
 
 ## Development
 
+The plugin is a Rust binary in `rust/`.
+
 ```sh
-bun install
-bun test
-bun run typecheck
-herdr plugin link "$PWD"
+cargo test --manifest-path rust/Cargo.toml
+cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
+bash scripts/stage-local.sh    # build and stage bin/herdr-annotate.exe
+herdr plugin link "$PWD"       # or "$PWD/lite" for the Lite variant
 ```
+
+`herdr plugin link` does not run manifest build hooks, so stage the binary first. It also replaces
+any existing `annotate` link; link the other directory to switch back.
+
+`bash scripts/lite-regression.sh` checks the runtime against goldens recorded from the retired Bun
+runtime. [docs/lite-testing.md](docs/lite-testing.md) covers what it compares and everything else
+that guards Lite.
 
 To test a local plannotator-tui build instead of the pinned release, put it in `bin/`
 before linking: `PLANNOTATOR_TUI_BIN=/path/to/plannotator-tui bash scripts/fetch-plannotator-tui.sh`.
-`herdr plugin link` replaces any existing `annotate` link; link the other directory to switch back.
 
 Before a release, `HERDR_SESSION=<disposable session> bash scripts/smoke.sh` installs fresh, upgrades
-from the first shipped commit, installs lite, swaps to full, and opens the review pane, then restores
-whatever was installed.
+from the first shipped commit, installs lite, swaps to full, and opens the manager and review panes,
+then restores whatever was installed.
 
 ## Neovim integration
 

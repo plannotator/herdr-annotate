@@ -1,8 +1,9 @@
 # Windows Full manifest acceptance checklist
 
 Decision: add `windows-full/herdr-plugin.toml`. Keep the root manifest unchanged.
-The new variant requires Herdr 0.9.0 and starts the native TUI directly. The Bun
-launcher is rejected. `q` quits the TUI; Escape is not a quit binding.
+The new variant requires Herdr 0.9.0 and starts the native TUI directly. No
+launcher process may sit between Herdr and the TUI. `q` quits the TUI; Escape is
+not a quit binding.
 
 Prepared 2026-09-07 against plugin commit
 `46cbf5dab1746dfeb46eb160c33990b0e0de15b0`, with TUI pin `0.6.0`.
@@ -15,8 +16,8 @@ requirements, not completed verification. Every box starts unchecked.
 - [ ] Add a GitHub-installable `windows-full/` subdirectory with plugin id
   `annotate`, name `Annotate`, the root plugin version, `platforms = ["windows"]`,
   and `min_herdr_version = "0.9.0"`. Do not rewrite the manifest during build.
-- [ ] Leave `herdr-plugin.toml`, `lite/herdr-plugin.toml`, and
-  `lite-rs/herdr-plugin.toml` unchanged, including their `0.8.0` minimums. Preserve
+- [ ] Leave `herdr-plugin.toml` and `lite/herdr-plugin.toml` unchanged, including
+  their `0.8.0` minimums. Preserve
   the root Unix wrapper and its platform gates. Do not change the TUI development
   manifest as part of this addition.
 - [ ] Compare parsed action ids, titles, descriptions, and contexts with the root
@@ -36,15 +37,15 @@ requirements, not completed verification. Every box starts unchecked.
 - [ ] Require exactly three panes: `editor` (Annotate, popup, 88×24), `manager`
   (Annotations, popup, 100×30), and one `doc` (Annotate, overlay). The `doc`
   command must be exactly `["./bin/plannotator-tui.exe", "herdr", "pane"]`.
-  No shell, Bun, PowerShell, command-string interpolation, or fallback launcher
-  may sit between Herdr's pane process and the TUI.
+  No shell, PowerShell, command-string interpolation, or fallback launcher may sit
+  between Herdr's pane process and the TUI.
 - [ ] Keep `open` and `open-link` as direct argv ending in `herdr open`, and
   `last` as direct argv ending in `herdr last`, all using
   `./bin/plannotator-tui.exe`. Preserve the `markdown-file` link handler's title,
   pattern, and `open-link` action. All actions, panes, the handler, and the build
   must be effective on Windows; no inherited Unix gate may disable them.
-- [ ] Reuse the existing Bun Lite sources with paths valid from `windows-full/`
-  (as `lite/` does with `../src/`). Verify those paths from an installed checkout,
+- [ ] Reuse the shared native runtime with paths valid from `windows-full/`
+  (as `lite/` does with `../bin/`). Verify those paths from an installed checkout,
   not just the repository root. Preserve shared annotation state and archive
   formats; changing variants must not migrate or clear them.
 - [ ] On isolated installs, Herdr 0.8.2 rejects the new variant with
@@ -55,8 +56,8 @@ requirements, not completed verification. Every box starts unchecked.
 - [ ] Extend manifest checks and CI path filters to include `windows-full/**`.
   Preserve existing root/Lite/development-manifest assertions rather than
   changing them to expect Windows Full everywhere. Run onboarding section 8's
-  applicable static, unit, manifest, and Lite parity checks with zero unexpected
-  divergences, plus Unix fetcher regression checks.
+  applicable static, unit, manifest, and Lite regression checks with zero
+  unexpected failures, plus Unix fetcher regression checks.
 
 ## 2. PowerShell fetch contract
 
@@ -132,10 +133,10 @@ does not establish that a real Herdr pane works.
   unchanged. Exercise `open`, `open-link` (including a percent-encoded `file://`
   path), and `last` with controlled context/transcript fixtures. Record fixture
   evidence separately from real-agent integration.
-- [ ] Open Full with Bun absent from pane `PATH`, and with inert review-folder
-  `bunfig.toml`/`.env` fixtures that would change a Bun launcher. Full must render
-  the intended document without loading those files. With Bun restored, smoke
-  the reused Lite action/pane paths from the installed subdirectory.
+- [ ] Open Full with inert review-folder `.env` fixtures that would change a
+  launcher process. Full must render the intended document without loading those
+  files. Smoke the reused Lite action and pane paths from the installed
+  subdirectory.
 - [ ] Send `q` through ConPTY input to the normal viewer. Assert TUI exit code
   zero, closure of the review pane, and a responsive original pane/client. Repeat
   in the default overlay and supported popup/split placements. Record Escape
@@ -223,7 +224,8 @@ for its specific assertions; it does not qualify the complete user experience.
 
   > The installer downloads the pinned native Windows TUI and verifies its
   > SHA-256 checksum. Document and agent-reply review starts that executable
-  > directly. Bun must still be on `PATH` for the Lite annotation tools.
+  > directly. The Lite annotation tools run the native `herdr-annotate` binary the
+  > same install downloads.
   > Press `q` to close the TUI. Escape is not a TUI quit key.
   >
   > Native terminal interaction, real-agent delivery, outer clipboard behavior,
