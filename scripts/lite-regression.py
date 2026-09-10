@@ -1789,54 +1789,84 @@ def manifest_entries(manifest: Mapping[str, object], table: str) -> dict[str, di
     }
 
 
+LITE_UNIX_BUILD = ["bash", "../scripts/fetch-herdr-annotate.sh"]
+LITE_WINDOWS_BUILD = [
+    "powershell.exe",
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    "../scripts/fetch-herdr-annotate.ps1",
+]
+
+
 def verify_manifests(root: Path, goldens: Goldens) -> None:
-    """Both Lite manifests must declare the same entrypoints, and the harness must drive them all."""
+    """The Lite variant and the Full plugin declare one entrypoint set, and the harness drives it.
+
+    Lite is the same runtime reached from one directory down, so the two manifests must agree on
+    every declaration a user sees, and neither may gate the annotation tools to a platform.
+    """
 
     def load(path: Path) -> dict[str, object]:
         with path.open("rb") as handle:
             return tomllib.load(handle)
 
     lite = load(root / "lite" / "herdr-plugin.toml")
-    native = load(root / "lite-rs" / "herdr-plugin.toml")
     full = load(root / "herdr-plugin.toml")
 
+    for field in ("id", "name", "version", "min_herdr_version", "description", "platforms"):
+        goldens.equal(f"manifest.{field}", full.get(field), lite.get(field))
+
+    goldens.equal(
+        "manifest.lite-build-commands",
+        [LITE_UNIX_BUILD, LITE_WINDOWS_BUILD],
+        [item.get("command") for item in lite.get("build", []) if isinstance(item, dict)],
+    )
+
     lite_actions = manifest_entries(lite, "actions")
-    native_actions = manifest_entries(native, "actions")
     lite_panes = manifest_entries(lite, "panes")
-    native_panes = manifest_entries(native, "panes")
     full_actions = manifest_entries(full, "actions")
     full_panes = manifest_entries(full, "panes")
 
-    goldens.equal("manifest.action-ids", sorted(lite_actions), sorted(native_actions))
-    goldens.equal("manifest.pane-ids", sorted(lite_panes), sorted(native_panes))
     goldens.equal(
         "manifest.harness-entrypoints",
         list(ENTRYPOINTS),
         sorted(set(lite_actions) | set(lite_panes)),
     )
+    # Full adds the plannotator-tui review entrypoints; every Lite one must also be in Full.
+    goldens.equal(
+        "manifest.pane-ids",
+        sorted(lite_panes),
+        sorted(set(full_panes) & set(lite_panes)),
+    )
+    goldens.equal(
+        "manifest.action-ids",
+        sorted(lite_actions),
+        sorted(set(full_actions) & set(lite_actions)),
+    )
 
-    for table, lite_entries, native_entries, full_entries, fields in (
-        ("action", lite_actions, native_actions, full_actions, ("title", "description", "contexts")),
-        ("pane", lite_panes, native_panes, full_panes, ("title", "placement", "width", "height")),
+    for table, lite_entries, full_entries, fields in (
+        ("action", lite_actions, full_actions, ("title", "description", "contexts")),
+        ("pane", lite_panes, full_panes, ("title", "placement", "width", "height")),
     ):
         for identifier, entry in lite_entries.items():
-            native_entry = native_entries.get(identifier, {})
             full_entry = full_entries.get(identifier, {})
             for field in fields:
                 goldens.equal(
                     f"manifest.{table}.{identifier}.{field}",
-                    (entry.get(field), entry.get(field)),
-                    (native_entry.get(field), full_entry.get(field)),
+                    entry.get(field),
+                    full_entry.get(field),
                 )
             goldens.equal(
                 f"manifest.{table}.{identifier}.command",
                 ([LITE_NATIVE_PROGRAM, identifier], [NATIVE_PROGRAM, identifier]),
-                (native_entry.get("command"), full_entry.get("command")),
+                (entry.get("command"), full_entry.get("command")),
             )
             goldens.equal(
                 f"manifest.{table}.{identifier}.platforms",
-                (None, None, None),
-                (entry.get("platforms"), native_entry.get("platforms"), full_entry.get("platforms")),
+                (None, None),
+                (entry.get("platforms"), full_entry.get("platforms")),
             )
 
 

@@ -57,9 +57,9 @@ binary="$root/rust/target/release/herdr-annotate"
 check "binary version" "$("$binary" --version)" "herdr-annotate $(tr -d '[:space:]' < "$root/herdr-annotate.version")"
 
 echo "== link native manifest"
-herdr plugin link "$root/lite-rs" >/dev/null
+herdr plugin link "$root/lite" >/dev/null
 installed="$(plugin_json)"
-check "plugin root" "$(printf '%s' "$installed" | field "p['plugin_root']")" "$root/lite-rs"
+check "plugin root" "$(printf '%s' "$installed" | field "p['plugin_root']")" "$root/lite"
 actions="$(herdr plugin action list --plugin annotate | python3 -c '
 import json,sys
 print(",".join(sorted(a["action_id"] for a in json.load(sys.stdin)["result"]["actions"])))')"
