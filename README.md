@@ -93,6 +93,12 @@ key = "prefix+shift+o"
 type = "plugin_action"
 command = "annotate.last"
 description = "review the agent's last reply"
+
+[[keys.command]]
+key = "prefix+ctrl+o"
+type = "plugin_action"
+command = "annotate.last-newest"
+description = "review the agent's newest reply"
 ```
 
 </details>
@@ -159,6 +165,7 @@ Full install. Works with Claude Code, Codex, pi, Copilot CLI, Droid, Oh My Pi, H
 |---|---|
 | `Ctrl+B O` | this folder, with a file tree |
 | `Ctrl+B Shift+O` | the agent's recent replies |
+| `Ctrl+B Ctrl+O` | the agent's newest reply, with no picker |
 | Ctrl-click a `file://…md` link | that file |
 
 **Send** (or `E`) makes the review the agent's next message. `q` closes.

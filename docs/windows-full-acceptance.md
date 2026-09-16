@@ -33,14 +33,16 @@ requirements, not completed verification. Every box starts unchecked.
   | `open` | Annotate: open here | `workspace`, `pane` |
   | `open-link` | Annotate this file | `pane` |
   | `last` | Annotate: agent's last message | `pane` |
+  | `last-newest` | Annotate: agent's newest message | `pane` |
 
 - [ ] Require exactly three panes: `editor` (Annotate, popup, 88×24), `manager`
   (Annotations, popup, 100×30), and one `doc` (Annotate, overlay). The `doc`
   command must be exactly `["./bin/plannotator-tui.exe", "herdr", "pane"]`.
   No shell, PowerShell, command-string interpolation, or fallback launcher may sit
   between Herdr's pane process and the TUI.
-- [ ] Keep `open` and `open-link` as direct argv ending in `herdr open`, and
-  `last` as direct argv ending in `herdr last`, all using
+- [ ] Keep `open` and `open-link` as direct argv ending in `herdr open`,
+  `last` as direct argv ending in `herdr last`, and `last-newest` as direct argv
+  ending in `herdr last --newest`, all using
   `./bin/plannotator-tui.exe`. Preserve the `markdown-file` link handler's title,
   pattern, and `open-link` action. All actions, panes, the handler, and the build
   must be effective on Windows; no inherited Unix gate may disable them.
@@ -131,7 +133,7 @@ does not establish that a real Herdr pane works.
   then an absolute path with spaces and Unicode. Assert each intended document
   renders. Verify delivery target variables supplied by the launcher survive
   unchanged. Exercise `open`, `open-link` (including a percent-encoded `file://`
-  path), and `last` with controlled context/transcript fixtures. Record fixture
+  path), `last`, and `last-newest` with controlled context/transcript fixtures. Record fixture
   evidence separately from real-agent integration.
 - [ ] Open Full with inert review-folder `.env` fixtures that would change a
   launcher process. Full must render the intended document without loading those
