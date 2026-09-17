@@ -5,14 +5,16 @@
 # pin at the repository root and its own default destination for every other caller.
 $ErrorActionPreference = "Stop"
 
-$variantRoot = Split-Path -Parent $PSScriptRoot
-$repositoryRoot = Split-Path -Parent $variantRoot
-$shared = Join-Path $repositoryRoot "scripts\fetch-plannotator-tui.ps1"
+# .NET rather than Split-Path: an extended-length \\?\ root is a path matrix row, and
+# Split-Path cannot parse one -- it reports a null drive and returns nothing.
+$variantRoot = [System.IO.Path]::GetDirectoryName($PSScriptRoot)
+$repositoryRoot = [System.IO.Path]::GetDirectoryName($variantRoot)
+$shared = [System.IO.Path]::Combine($repositoryRoot, "scripts", "fetch-plannotator-tui.ps1")
 if (-not (Test-Path -LiteralPath $shared -PathType Leaf)) {
   throw "shared fetcher not found at $shared"
 }
 
-& $shared -DestinationDirectory (Join-Path $variantRoot "bin")
+& $shared -DestinationDirectory ([System.IO.Path]::Combine($variantRoot, "bin"))
 
 # The shared fetcher warns and exits zero when a download, checksum, architecture or
 # replacement step fails, so that Lite stays available. Propagating its status keeps that

@@ -15,6 +15,7 @@ on:
       - "scripts/test-herdr-windows-plugin.ps1"
       - "scripts/test-herdr-windows-full-plugin.ps1"
       - "scripts/test-herdr-windows-full-pane.ps1"
+      - "scripts/test-herdr-windows-full-paths.ps1"
       - "scripts/test-http-server.py"
       - "scripts/test-windows-full-manifest.py"
       - "windows-full/**"
@@ -60,6 +61,8 @@ jobs:
         run: ./scripts/test-herdr-windows-full-plugin.ps1
       - name: windows-full review pane render, quit and teardown
         run: ./scripts/test-herdr-windows-full-pane.ps1
+      - name: windows-full path matrix
+        run: ./scripts/test-herdr-windows-full-paths.ps1
 
   unix-regression:
     strategy:

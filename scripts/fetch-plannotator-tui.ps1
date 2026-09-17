@@ -5,21 +5,31 @@
 param([string]$DestinationDirectory)
 
 $ErrorActionPreference = "Stop"
-Set-Location (Join-Path $PSScriptRoot "..")
+# Anchored on the script's own location rather than the current directory, and every path
+# below is absolute and literal. A checkout path may legitimately contain square brackets --
+# the Windows acceptance path matrix requires it -- and PowerShell reads those as wildcards in
+# any -Path parameter. Worse, once the current directory contains them, it is stored escaped,
+# so even -LiteralPath with a relative path resolves to a name with backticks in it and is not
+# found. Not depending on the current directory at all is what makes that whole class go away.
+# .NET rather than Split-Path: an extended-length \\?\ root is a path matrix row, and
+# Split-Path cannot parse one -- it reports a null drive and returns nothing.
+$root = [System.IO.Path]::GetDirectoryName($PSScriptRoot)
 
-$versionContents = Get-Content -LiteralPath "plannotator-tui.version" -Raw
+$versionContents = Get-Content -LiteralPath ([System.IO.Path]::Combine($root, "plannotator-tui.version")) -Raw
 $version = if ($null -eq $versionContents) { "" } else { [string]$versionContents }
 $version = $version.Trim()
 if (-not $version) { throw "plannotator-tui.version is empty" }
 
 $destinationDirectory = if ([string]::IsNullOrWhiteSpace($DestinationDirectory)) {
-  Join-Path (Get-Location).Path "bin"
+  [System.IO.Path]::Combine($root, "bin")
 } else {
   $DestinationDirectory
 }
-$destination = Join-Path $destinationDirectory "plannotator-tui.exe"
-$stamp = Join-Path $destinationDirectory "plannotator-tui.version"
-New-Item -ItemType Directory -Force $destinationDirectory | Out-Null
+$destination = [System.IO.Path]::Combine($destinationDirectory, "plannotator-tui.exe")
+$stamp = [System.IO.Path]::Combine($destinationDirectory, "plannotator-tui.version")
+# .NET rather than New-Item for the same reason: the destination is an absolute path that may
+# contain brackets, and New-Item -Path would treat them as a wildcard.
+[System.IO.Directory]::CreateDirectory($destinationDirectory) | Out-Null
 
 $localOverride = [Environment]::GetEnvironmentVariable("PLANNOTATOR_TUI_BIN", "Process")
 $hasLocalOverride = $null -ne $localOverride
@@ -38,9 +48,9 @@ if ((Test-Path -LiteralPath $destination -PathType Leaf) -and
 function Install-PlannotatorTui {
   param([Parameter(Mandatory = $true)][string]$Source)
 
-  $candidate = Join-Path $destinationDirectory ("plannotator-tui-" + [guid]::NewGuid() + ".tmp")
-  $backup = Join-Path $destinationDirectory ("plannotator-tui-" + [guid]::NewGuid() + ".bak")
-  $stampBackup = Join-Path $destinationDirectory ("plannotator-tui-version-" + [guid]::NewGuid() + ".bak")
+  $candidate = [System.IO.Path]::Combine($destinationDirectory, ("plannotator-tui-" + [guid]::NewGuid() + ".tmp"))
+  $backup = [System.IO.Path]::Combine($destinationDirectory, ("plannotator-tui-" + [guid]::NewGuid() + ".bak"))
+  $stampBackup = [System.IO.Path]::Combine($destinationDirectory, ("plannotator-tui-version-" + [guid]::NewGuid() + ".bak"))
   $hadDestination = Test-Path -LiteralPath $destination -PathType Leaf
   $hadStamp = Test-Path -LiteralPath $stamp -PathType Leaf
   $replacementCompleted = $false
@@ -122,8 +132,12 @@ try {
     "PLANNOTATOR_TUI_RELEASE_BASE",
     "Process"
   )
-  # PLANNOTATOR_TUI_RELEASE_BASE is a test-only seam for a loopback fixture server.
-  $base = if ($null -ne $releaseBaseOverride) {
+  # PLANNOTATOR_TUI_RELEASE_BASE is a test-only seam for a loopback fixture server. An empty
+  # value counts as absent: a caller clearing it through an API that binds $null as "" would
+  # otherwise leave the name defined, and an empty base builds a URL with no host at all --
+  # which surfaces as "invalid URI" long after the mistake, through the warn-and-exit-zero
+  # contract that hides it.
+  $base = if (-not [string]::IsNullOrWhiteSpace($releaseBaseOverride)) {
     $releaseBaseOverride.TrimEnd([char]"/")
   } else {
     "https://github.com/plannotator/plannotator-tui/releases/download/v$version"
@@ -131,7 +145,7 @@ try {
 
   $temporary = Join-Path ([System.IO.Path]::GetTempPath()) ("plannotator-tui-" + [guid]::NewGuid())
   try {
-    New-Item -ItemType Directory $temporary | Out-Null
+    [System.IO.Directory]::CreateDirectory($temporary) | Out-Null
     $downloadedAsset = Join-Path $temporary $asset
     $checksumFile = Join-Path $temporary "SHA256SUMS"
     Invoke-WebRequest -UseBasicParsing "$base/$asset" -OutFile $downloadedAsset
