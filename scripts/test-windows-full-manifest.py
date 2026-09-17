@@ -263,6 +263,11 @@ def check_windows_full(path: Path, root_path: Path) -> None:
     build_entries = builds(path, manifest)
     if [item.get("command") for item in build_entries] != WINDOWS_FULL_BUILDS:
         fail(path, f"unexpected builds: {[i.get('command') for i in build_entries]!r}")
+    for item in build_entries:
+        # A build gated to macOS/Linux would stage nothing here, leaving the manifest
+        # pointing at binaries that were never fetched.
+        if "platforms" in item:
+            fail(path, f"a build carries a platform gate: {item['platforms']!r}")
 
     # Parity is the point of the variant: the same surface, reached a different way.
     if surface(path, manifest, "actions") != surface(root_path, root, "actions"):
