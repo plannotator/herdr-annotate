@@ -1,4 +1,6 @@
 .DS_Store
 bin/*
 !bin/.gitkeep
+windows-full/bin/*
+!windows-full/bin/.gitkeep
 /rust/target/

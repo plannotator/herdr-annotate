@@ -1,3 +1,9 @@
+# -DestinationDirectory stages the binary and its stamp somewhere other than the repository's
+# own bin/, which is how the windows-full variant keeps its copy beside its manifest. Omitted,
+# the destination is unchanged, so every existing caller behaves exactly as before. The pin is
+# read from the repository root either way: there is one release pin, not one per variant.
+param([string]$DestinationDirectory)
+
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
@@ -6,7 +12,11 @@ $version = if ($null -eq $versionContents) { "" } else { [string]$versionContent
 $version = $version.Trim()
 if (-not $version) { throw "plannotator-tui.version is empty" }
 
-$destinationDirectory = Join-Path (Get-Location).Path "bin"
+$destinationDirectory = if ([string]::IsNullOrWhiteSpace($DestinationDirectory)) {
+  Join-Path (Get-Location).Path "bin"
+} else {
+  $DestinationDirectory
+}
 $destination = Join-Path $destinationDirectory "plannotator-tui.exe"
 $stamp = Join-Path $destinationDirectory "plannotator-tui.version"
 New-Item -ItemType Directory -Force $destinationDirectory | Out-Null

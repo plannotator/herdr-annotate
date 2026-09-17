@@ -1,0 +1,120 @@
+# Herdr Annotate, Windows Full: the terminal annotation tools plus document review.
+# Install with: herdr plugin install plannotator/herdr-annotate/windows-full
+# The repository root keeps the macOS/Linux Full plugin; lite/ keeps the terminal-only
+# variant, which is what Windows on Herdr 0.8.x should install.
+#
+# Herdr 0.9.0 is required because this variant starts plannotator-tui as the pane process
+# itself. Herdr resolves an explicit relative program against the plugin root and passes the
+# review folder as the pane cwd, so "./bin/plannotator-tui.exe" reaches the staged binary
+# from a cwd that contains no bin/. Measured on 0.9.0 (Windows 11, x86_64): a missing
+# program reports CreateProcessW `"\\?\<plugin root>\bin\<name>.exe"` in cwd `Some(<review
+# folder>)`, which is the resolution this manifest depends on.
+#
+# No launcher may sit between Herdr and the TUI. The resolved program reaches CreateProcessW
+# in extended-length form, and while a native binary runs from a \\?\ path unchanged, a
+# powershell.exe image started that way exits 0xFFFF0000 immediately. A wrapper would not be
+# slower or less tidy here; it would not stay up.
+#
+# The native annotation runtime is shared with the repository root, reached one directory up
+# the way lite/ reaches it. Only plannotator-tui is staged inside this variant, because its
+# fetch is Windows-specific and the root must keep staging its own copy for Unix.
+
+id = "annotate"
+name = "Annotate"
+version = "0.4.0"
+min_herdr_version = "0.9.0"
+description = "Comment on terminal selections and copy annotations as agent context."
+platforms = ["windows"]
+
+[[build]]
+command = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "../scripts/fetch-herdr-annotate.ps1"]
+
+# Stages plannotator-tui into windows-full/bin/. The wrapper resolves both the shared fetcher
+# and the destination from its own location, so the build depends on neither the caller's cwd
+# nor HERDR_PLUGIN_ROOT, and the shared fetcher keeps its default destination for every other
+# caller.
+[[build]]
+command = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "scripts/fetch-plannotator-tui.ps1"]
+
+[[actions]]
+id = "capture"
+title = "Annotate selection"
+description = "Open a comment dialog for the current terminal selection."
+contexts = ["pane"]
+command = ["../bin/herdr-annotate.exe", "capture"]
+
+[[actions]]
+id = "copy-context"
+title = "Copy annotations as context"
+description = "Copy all saved annotations to the clipboard as Markdown."
+contexts = ["global"]
+command = ["../bin/herdr-annotate.exe", "copy-context"]
+
+[[actions]]
+id = "copy-archive"
+title = "Copy annotations as context and archive them"
+description = "Copy all saved annotations to the clipboard as Markdown, then archive them."
+contexts = ["global"]
+command = ["../bin/herdr-annotate.exe", "copy-archive"]
+
+[[actions]]
+id = "manage"
+title = "Manage annotations"
+description = "Browse, copy, archive, restore, and delete annotations."
+contexts = ["global"]
+command = ["../bin/herdr-annotate.exe", "manage"]
+
+[[panes]]
+id = "editor"
+title = "Annotate"
+placement = "popup"
+width = 88
+height = 24
+command = ["../bin/herdr-annotate.exe", "editor"]
+
+[[panes]]
+id = "manager"
+title = "Annotations"
+placement = "popup"
+width = 100
+height = 30
+command = ["../bin/herdr-annotate.exe", "manager"]
+
+# Where it opens (overlay | split | popup) remains the user's choice in plannotator-tui's
+# config file.
+[[panes]]
+id = "doc"
+title = "Annotate"
+placement = "overlay"
+command = ["./bin/plannotator-tui.exe", "herdr", "pane"]
+
+# Both actions run the TUI directly, which reads Herdr's invocation context: the focused
+# pane's folder (open) or the clicked file:// link (open-link), and the focused pane's agent
+# as the target the review is sent back to.
+[[actions]]
+id = "open"
+title = "Annotate: open here"
+description = "Review the focused pane's folder in plannotator-tui and send feedback to its agent."
+contexts = ["workspace", "pane"]
+command = ["./bin/plannotator-tui.exe", "herdr", "open"]
+
+[[actions]]
+id = "open-link"
+title = "Annotate this file"
+description = "Open a Ctrl-clicked Markdown file in plannotator-tui."
+contexts = ["pane"]
+command = ["./bin/plannotator-tui.exe", "herdr", "open"]
+
+[[actions]]
+id = "last"
+title = "Annotate: agent's last message"
+description = "Review the focused agent's most recent message in plannotator-tui and send feedback back."
+contexts = ["pane"]
+command = ["./bin/plannotator-tui.exe", "herdr", "last"]
+
+# Ctrl-click on a file:// Markdown link. Anchored on the scheme so web links never match.
+[[link_handlers]]
+id = "markdown-file"
+title = "Annotate this file"
+pattern = "^file://.*\\.(md|markdown|mdx)$"
+action = "open-link"

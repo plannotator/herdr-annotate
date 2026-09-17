@@ -15,6 +15,7 @@ on:
       - "scripts/test-herdr-windows-plugin.ps1"
       - "scripts/test-http-server.py"
       - "scripts/test-windows-full-manifest.py"
+      - "windows-full/**"
       - ".github/workflows/windows-full-ci.yml"
   merge_group:
 
