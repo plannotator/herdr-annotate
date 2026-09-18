@@ -45,17 +45,11 @@ Global copies stay on `herdr clipboard set --stdin` only. OSC 52 remains the pan
 ## Verification Evidence
 
 - `cargo test --test commands`:
-  6 passed (1 suite, 0.98s):
-  - `commands::capture_persists_selection_and_context_then_opens_the_editor`
-  - `commands::failed_editor_open_removes_the_pending_file_and_reports_failure`
-  - `commands::copy_context_with_an_empty_store_notifies_and_succeeds`
-  - `commands::manage_opens_the_manager_pane_with_the_typescript_arguments`
-  - `commands::copy_archive_failure_preserves_active_annotations_and_does_not_archive`
-  - `commands::copy_archive_success_archives_and_clears_active`
+  7 passed, including `copy_context_routes_markdown_through_herdr_clipboard_set` and copy-archive stdin routing through `clipboard set --stdin`.
 - `cargo test --lib`:
-  80 passed (1 suite, 0.05s) covering formatting, store, archive workflow, handoff, and CLI routing.
-- `cargo build --release && cargo test`:
-  86 passed across all 4 suites (0.00s execution).
+  80 passed covering formatting, store, archive workflow, handoff, and CLI routing.
+- `cargo test` after the clipboard-path tests:
+  87 passed across 4 suites.
 
 ## Remaining Gaps / Next Steps
 - Plugin code for global copy is landed and tested. Live round-trip is **blocked on fleet Herdr version, not plugin code**.
