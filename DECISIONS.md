@@ -50,3 +50,4 @@ The existing integration test harness in `rust/tests/commands.rs` used a shell s
 ## Remaining Gaps / Next Steps
 - Production prebuilt binaries in `bin/` (`herdr-annotate.exe` across all target architectures) will need to be re-staged when a release tag is cut.
 - End-to-end live testing against a live SSH / multi-machine Herdr connection (client on Mac, server on spark0/linux) to observe full roundtrip to system clipboard outside simulated test harnesses.
+- **Blocked (2026-09-18):** fleet `~/.local/bin/herdr` on `studio`, `spark0`, `spark1`, and `mbp-16-24` does not expose `herdr clipboard set --stdin` (`unknown command: clipboard`). Live multi-machine copy cannot roundtrip until that patched Herdr is installed. Linked plugin binaries in `/dev/herdr-remote-annotation/herdr-annotate/bin/` are still the 2026-09-14/15 pre-RPC builds. `spark0` git pack indices are corrupted by AppleDouble `._pack-*.idx` files. `emo-win` SSH timed out.
