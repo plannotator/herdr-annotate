@@ -1,11 +1,15 @@
 # GOAL — multi-machine herdr-annotate
 
+Linear parent: [EMO-404](https://linear.app/emo-eth/issue/EMO-404/herdr-fix-multi-machine-herdr-annotate-platform-binary-distribution)
+Herdr: annotate-clipboard (w3R)
+
 Written: 2026-09-18T08:17:43Z
-Updated: 2026-09-18T20:32:00Z
+Updated: 2026-09-18T20:36:00Z
 Worktree: /Users/emo/.herdr/worktrees/herdr-annotate/annotate-clipboard
 Repo: /Users/emo/dev/herdr-remote-annotation/herdr-annotate
 Branch: annotate-clipboard
 Status: **PROPOSAL — awaiting operator approval of Done / Acceptance / Validation. Not permission to merge or close.**
+Owner: this tree is the single annotate chair. `herdr-annotate-broken` (w2V) is sitting.
 
 ## Objective
 Global copy actions (`copy-context`, `copy-archive`) on a remote/multi-machine Herdr server deliver formatted Markdown to the **viewing client's** clipboard via `herdr clipboard set --stdin`. No second clipboard transport.
@@ -58,7 +62,19 @@ How we prove the lists above. Operator must approve these checks.
 - Do not upgrade/deploy fleet `~/.local/bin/herdr` from this plugin worktree unless the operator assigns that.
 - Do not close Linear tickets.
 
+## Remaining work (this tree only)
+
+Consolidated from annotate-clipboard + parked `herdr-annotate-broken` (w2V). Operator 2026-09-18: one owner, one list. Extra chair is sitting, not hidden, not removed.
+
+1. Operator approve Done / Acceptance / Validation above. Until then, nothing here is finished.
+2. Fleet Herdr on the **plugin host** must expose `herdr clipboard set --stdin`. Command-center Mac has it. Last probe: `spark0` / `spark1` / `mbp-16-24` `~/.local/bin/herdr` did not. `emo-win` SSH timed out. Do not invent a second clipboard transport while waiting.
+3. After (2): restage `herdr-annotate.exe` in fleet linked plugin dirs (`…/dev/herdr-remote-annotation/herdr-annotate/bin/`). Those copies are still 2026-09-14/15 pre-RPC binaries.
+4. Live round-trip: viewing Mac, plugin on `spark0` or `spark1`, `copy-context` lands `# Annotated context` on the viewing Mac clipboard. Validation item (4). Until this runs, the worktree is not finished.
+5. `spark0` herdr-annotate git pack indices corrupted by AppleDouble `._pack-*.idx`.
+6. Parked-chair artifacts stay in `/Users/emo/.herdr/worktrees/scratch/herdr-annotate-broken` (`SITTING.md`, 2026-09-15 deploy logs, `herdr-fleet-deploy.sh`). Do not continue work there.
+
 ## Current evidence (not a finish)
 - Plugin path landed: `5866499`, tests `ca9e446`, docs `6b15b61` / `cf367bf` / `7e1b8aa`.
-- Fleet `studio` / `spark0` / `spark1` / `emo-win` still lack `herdr clipboard set`. Live validation item (4) is unmet.
+- Fleet `studio` / `spark0` / `spark1` / `emo-win` still lack `herdr clipboard set` on last probe. Live validation item (4) is unmet.
 - `standup: … done` is a status ping only. It is not permission to merge or close.
+- Extra annotate chair `herdr-annotate-broken` (w2V) is sitting as of 2026-09-18T20:36Z.
