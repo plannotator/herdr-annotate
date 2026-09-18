@@ -54,5 +54,5 @@ Global copies stay on `herdr clipboard set --stdin` only. OSC 52 remains the pan
 ## Remaining Gaps / Next Steps
 - Plugin path is landed and locally proven. Fleet Herdr on spark0/spark1/mbp-16-24 now exposes `herdr clipboard set --stdin`.
 - Local viewing-client round-trip succeeded 2026-09-18T20:58Z (`copy-context` → Mac clipboard `# Annotated context`).
-- Remote plugin-host round-trip still unmet: spark0 CLI invoke returns `no_foreground_client` unless a TUI client is viewing that machine. Do not steal focus to attach one.
+- Remote plugin-host round-trip still unmet: spark0 CLI invoke returns `no_foreground_client` unless a TUI client is viewing that machine. Command-center Herdr has no `--machine` flag, so saved-machine plugin actions cannot be targeted from this Mac's CLI. Do not steal focus to attach a viewer.
 - `emo-win` SSH timed out. Do not invent a second clipboard transport.

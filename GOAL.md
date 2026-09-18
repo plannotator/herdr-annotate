@@ -64,7 +64,7 @@ How we prove the lists above. Operator must approve these checks.
 
 ## Remaining work (this tree only)
 
-1. **Live remote round-trip (validation 4, unmet):** operator must be *viewing* a spark0/spark1 workspace in the Herdr TUI, then invoke `copy-context`. SSH/CLI on spark0 reaches `herdr clipboard set` and returns `no_foreground_client` when no TUI viewer is attached. Do not steal focus to select that machine.
+1. **Live remote round-trip (validation 4, unmet):** operator must be *viewing* a spark0/spark1 workspace in the Herdr TUI, then invoke `copy-context`. SSH/CLI on spark0 reaches `herdr clipboard set` and returns `no_foreground_client` when no TUI viewer is attached. Command-center `herdr` has no `--machine` flag (`unknown option: --machine`), so this Mac cannot target a saved-machine plugin action from CLI. Do not steal focus to select that machine.
 2. `emo-win` SSH still timed out.
 3. Parked-chair artifacts stay in `/Users/emo/.herdr/worktrees/scratch/herdr-annotate-broken`. Do not continue work there. Extra chair sitting, not hidden, not removed.
 
@@ -75,4 +75,5 @@ How we prove the lists above. Operator must approve these checks.
 - Local live round-trip **met**: `herdr plugin action invoke copy-context --plugin annotate` on this Mac wrote `# Annotated context` plus probe body to the viewing Mac clipboard (plugin-log-239, exit 0). Probe records cleared from both local and spark0 `annotations.jsonl`.
 - spark0 AppleDouble `.git/objects/pack/._pack-*` removed. git is a usable work tree again.
 - spark0 CLI `copy-context` (plugin-log-41) failed `no_foreground_client` — plugin RPC works; delivery needs a TUI viewer.
+- Command-center `herdr plugin action invoke` exists; `herdr --machine` does not (`unknown option`). Remote invoke from this Mac is SSH-to-host only.
 - `standup: … done` is a status ping only. It is not permission to merge or close.
