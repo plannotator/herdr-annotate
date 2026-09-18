@@ -1,7 +1,7 @@
 # DECISIONS — herdr-annotate multi-machine
 
 Started: 2026-09-18T08:17:43Z
-Updated: 2026-09-18T20:25:00Z
+Updated: 2026-09-18T20:58:00Z
 Worktree: /Users/emo/.herdr/worktrees/herdr-annotate/annotate-clipboard
 Branch: annotate-clipboard
 Workspace: annotate-clipboard
@@ -52,8 +52,7 @@ Global copies stay on `herdr clipboard set --stdin` only. OSC 52 remains the pan
   87 passed across 4 suites.
 
 ## Remaining Gaps / Next Steps
-- Plugin code for global copy is landed and tested. Live round-trip is **blocked on fleet Herdr version, not plugin code**.
-- Command-center Herdr 0.9.0 on this Mac **does** have `herdr clipboard set`. Fleet boxes (`studio`, `spark0`, `spark1`, `emo-win`) still run a Herdr without that command, so a plugin running on those servers cannot deliver client clipboard.
-- Production prebuilt binaries in `bin/` (`herdr-annotate.exe` across all target architectures) will need to be re-staged when a release tag is cut. Linked plugin trees on fleet hosts still hold 2026-09-14/15 pre-RPC `herdr-annotate.exe` until restaged after Herdr is upgraded.
-- End-to-end live testing (client on command-center Mac, plugin on a fleet box) waits on that fleet Herdr upgrade. Do not invent a second clipboard transport in the meantime.
-- `spark0` git pack indices were corrupted by AppleDouble `._pack-*.idx` files. `emo-win` SSH timed out.
+- Plugin path is landed and locally proven. Fleet Herdr on spark0/spark1/mbp-16-24 now exposes `herdr clipboard set --stdin`.
+- Local viewing-client round-trip succeeded 2026-09-18T20:58Z (`copy-context` → Mac clipboard `# Annotated context`).
+- Remote plugin-host round-trip still unmet: spark0 CLI invoke returns `no_foreground_client` unless a TUI client is viewing that machine. Do not steal focus to attach one.
+- `emo-win` SSH timed out. Do not invent a second clipboard transport.
