@@ -31,8 +31,8 @@ In Herdr core (commit `0a4f3e5f` merged into `2c854568` and deployed across flee
 
 ### D3: Test Harness Updates for stdin-consuming Fake Herdr
 The existing integration test harness in `rust/tests/commands.rs` used a shell script mock for `herdr` that did not consume standard input. Because `herdr clipboard set --stdin` pipes clipboard text into stdin of the child process, a non-consuming mock can cause pipe write errors (EPIPE) if closed early.
-- We update `fake_herdr` in `rust/tests/commands.rs` to consume `cat > /dev/null` before logging arguments and exiting.
-- We add dedicated regression tests for `copy-archive` verifying active annotation retention on failure and archiving on success.
+- We update `fake_herdr` in `rust/tests/commands.rs` to consume stdin (now captured to `HERDR_TEST_STDIN`) before logging arguments and exiting.
+- We add dedicated regression tests for `copy-archive` verifying active annotation retention on failure and archiving on success, plus `copy_context_routes_markdown_through_herdr_clipboard_set` proving the `clipboard set --stdin` argv and Markdown payload.
 
 ### D4: No second clipboard transport
 Global copies stay on `herdr clipboard set --stdin` only. OSC 52 remains the pane-manager path (it needs a PTY). Do not add VPN clipboard sinks, extra RPC, or silent local-OS fallbacks for `copy-context` / `copy-archive`. Wait for fleet Herdr to grow `clipboard set`.
