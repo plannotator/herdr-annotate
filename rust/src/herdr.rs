@@ -1,5 +1,6 @@
 //! Calls back into the Herdr CLI.
 
+use std::io::Write;
 use std::process::{Command, Stdio};
 
 fn binary() -> std::ffi::OsString {
@@ -52,4 +53,37 @@ pub fn notify(title: &str, body: Option<&str>) {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
+}
+
+pub fn write_client_clipboard(text: &str) -> Result<(), String> {
+    let mut child = process()
+        .args(["clipboard", "set", "--stdin"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|_| "herdr clipboard set failed".to_owned())?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        if stdin.write_all(text.as_bytes()).is_err() {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("herdr clipboard set failed".to_owned());
+        }
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|_| "herdr clipboard set failed".to_owned())?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        if stderr.is_empty() {
+            Err("herdr clipboard set failed".to_owned())
+        } else {
+            Err(stderr)
+        }
+    }
 }

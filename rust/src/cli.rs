@@ -13,10 +13,10 @@ use uuid::Uuid;
 use crate::archive_workflow::{
     CopyAndArchiveDependencies, CopyAndArchiveOutcome, copy_and_archive_annotations,
 };
-use crate::clipboard::{read_clipboard, write_clipboard};
+use crate::clipboard::read_clipboard;
 use crate::format::format_annotations;
 use crate::handoff::take_default_handoff;
-use crate::herdr::{notify, run_herdr};
+use crate::herdr::{notify, run_herdr, write_client_clipboard};
 use crate::paths::{normalize_windows_path, plugin_root, state_dir};
 use crate::store::{
     append_archived_set, load_annotations, newest_first_annotations, remove_annotations_by_id,
@@ -128,7 +128,7 @@ fn copy_context() -> Result<(), String> {
         notify("No annotations", Some("There is nothing to copy yet."));
         return Ok(());
     }
-    write_clipboard(&format_annotations(&annotations))?;
+    write_client_clipboard(&format_annotations(&annotations))?;
     notify(
         "Annotations copied",
         Some(&format!(
@@ -196,7 +196,7 @@ fn copy_archive() -> Result<(), String> {
             }
             loaded
         },
-        write_clipboard: |text: String| write_clipboard(&text),
+        write_clipboard: |text: String| write_client_clipboard(&text),
         save_archive: |archive: ArchivedAnnotationSet| append_archived_set(&dir, &archive),
         remove_active: |ids: Vec<String>| remove_annotations_by_id(&dir, &ids),
         create_archive_id: || Uuid::new_v4().to_string(),
