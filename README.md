@@ -16,14 +16,14 @@ Annotate inside [Herdr](https://github.com/herdrdev/herdr): comment on any termi
 
 ## Requirements
 
-- Herdr 0.8.0 or later
+- Herdr 0.9.0 with client clipboard support (or compatible patched build)
 - macOS, Linux, or Windows
 
 There is no runtime to install. Both installs download a small prebuilt `herdr-annotate` binary and verify its SHA-256 checksum.
 
-On Linux, install `wl-clipboard`, `xclip`, or `xsel` for clipboard access.
+Global copy actions (`copy-context`, `copy-archive`) forward directly to the connected viewing client via Herdr's clipboard API. For the manager popup's local copy fallback, install `wl-clipboard`, `xclip`, or `xsel` on Linux when running on a local desktop session alongside terminal OSC 52.
 
-On Windows, native Herdr plugin support is preview/best-effort. Clipboard access uses PowerShell; no extra clipboard package is required. The install, keybinding, configuration check, reload, and use instructions below also apply on Windows.
+On Windows, native Herdr plugin support is preview/best-effort. Local clipboard fallback uses PowerShell; no extra clipboard package is required. The install, keybinding, configuration check, reload, and use instructions below also apply on Windows.
 
 ## Install
 
@@ -146,10 +146,7 @@ herdr server reload-config
 | `Ctrl+B Ctrl+A` | copy all annotations as Markdown, then archive them |
 | `Ctrl+B M` | manage · `y` copy one · `c` copy all · `Shift+C` copy and archive · `Tab` archives (`y` copy · `u` restore · `d d` delete) |
 
-Copies made inside the manager pane also emit OSC 52, so on Herdr 0.9.0 they reach the clipboard of
-the machine you are viewing from even when the plugin runs on a remote server with no clipboard tool
-installed; `Ctrl+B Shift+A` and `Ctrl+B Ctrl+A` do not, because those actions run outside a pane and
-have no terminal to write to.
+Global copy actions (`Ctrl+B Shift+A` and `Ctrl+B Ctrl+A`) forward annotations directly to the viewing client's clipboard via Herdr's clipboard API. Copies made inside the manager pane also emit OSC 52, reaching the viewing client on local or remote sessions.
 
 ### Review documents and agent replies
 
@@ -171,44 +168,14 @@ Full install. Works with Claude Code, Codex, pi, Copilot CLI, Droid, Oh My Pi, H
 
 ### Remote sessions
 
-Over SSH or `herdr --remote`, the plugin runs on the **server**, and two things get in the way:
-Herdr's default copy-on-select clears the selection on mouse-up, and the prefix keypress
-clears whatever selection remains before a bound action runs
-([herdrdev/herdr#3380](https://github.com/herdrdev/herdr/issues/3380)). A headless server also
-has no clipboard for the plugin to fall back to.
-
-What works today:
-
-1. On the server, keep the selection after mouse-up:
-
-   ```toml
-   # remote server: ~/.config/herdr/config.toml
-   [ui]
-   copy_on_select = false   # the selection stays; copy explicitly with Ctrl+C
-   ```
-
-2. Trigger the action **without a keypress in Herdr**, while the selection is still
-   highlighted. From your laptop, bound to any key in your terminal or OS:
-
-   ```sh
-   ssh <host> herdr plugin action invoke annotate.capture
-   # named session on the server: ssh <host> HERDR_SESSION=<name> herdr plugin action invoke annotate.capture
-   ```
-
-   The action reads the focused pane's selection through Herdr's API, which never touches the
-   keyboard path, so the text arrives. Verified: the same selection gives `selected_text` this
-   way and nothing through `prefix+a`.
-
-3. In Neovim, use the mapping below; it hands the selection over in a file.
-
-Server-side key bindings and `herdr --remote <host> --remote-keybindings server` are still
-needed for the manager (`prefix+m`) and other plugin keys; without the flag, `herdr --remote`
-uses your local keys and drops plugin bindings. `prefix+a` itself will work once
-herdrdev/herdr#3380 is fixed.
+Over SSH or saved machine federation, terminal annotations work directly from the viewing client:
+- Mouse selections stay highlighted across mouse-up (with automatic copying preserved) and across prefix keys (`prefix+a`), capturing the remote selection cleanly into the annotation dialog.
+- Global copies (`prefix+shift+a` and `prefix+ctrl+a`) route through Herdr's clipboard API, delivering formatted Markdown directly to your viewing client.
+- For standalone `herdr --remote <host>` connections, connect with `--remote-keybindings server` (or configure remote machine profiles via `herdr machine add`) so the remote server's plugin actions are published to your client.
 
 ## Selection limits
 
-Herdr Annotate reads text that Herdr copies to the system clipboard. The plugin cannot read selection state from Neovim or another terminal application.
+Herdr Annotate receives the active terminal selection directly from Herdr's client shell invocation context. When triggered without an active Herdr terminal selection, it falls back to handoff text or clipboard reads. The plugin cannot read selection state from Neovim or another internal terminal application; use the Neovim mapping below to hand selections over directly.
 
 ## Development
 

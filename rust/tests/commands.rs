@@ -28,7 +28,7 @@ fn fake_herdr(dir: &Path) -> PathBuf {
     let script = dir.join("fake-herdr");
     fs::write(
         &script,
-        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$HERDR_TEST_LOG\"\nexit \"${HERDR_TEST_EXIT:-0}\"\n",
+        "#!/bin/sh\ncat >> \"${HERDR_TEST_STDIN:-/dev/null}\"\nprintf '%s\\n' \"$@\" >> \"$HERDR_TEST_LOG\"\nexit \"${HERDR_TEST_EXIT:-0}\"\n",
     )
     .expect("fake Herdr");
     fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).expect("executable");
@@ -41,14 +41,23 @@ fn binary() -> PathBuf {
 
 fn command(dir: &Path, subcommand: &str) -> (Command, PathBuf) {
     let log = dir.join("herdr.log");
+    let stdin = dir.join("herdr.stdin");
     let mut command = Command::new(binary());
     command
         .arg(subcommand)
         .env("HERDR_BIN_PATH", fake_herdr(dir))
         .env("HERDR_TEST_LOG", &log)
+        .env("HERDR_TEST_STDIN", &stdin)
         .env("HERDR_PLUGIN_STATE_DIR", dir.join("state"))
         .env("HERDR_PLUGIN_ROOT", dir.join("plugin"));
     (command, log)
+}
+
+fn write_annotation(dir: &Path, record: &str) -> PathBuf {
+    let state = dir.join("state");
+    fs::create_dir_all(&state).expect("state dir");
+    fs::write(state.join("annotations.jsonl"), record).expect("annotations");
+    state
 }
 
 #[test]
@@ -61,6 +70,30 @@ fn copy_context_with_an_empty_store_notifies_and_succeeds() {
         fs::read_to_string(log).expect("notification"),
         "notification\nshow\nNo annotations\n--body\nThere is nothing to copy yet.\n"
     );
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn copy_context_routes_markdown_through_herdr_clipboard_set() {
+    let dir = directory();
+    write_annotation(
+        &dir,
+        "{\"selectedText\":\"hello\",\"capturedAt\":\"2026-09-14T00:00:00.000Z\",\"context\":{\"workspace_id\":\"workspace-1\"},\"id\":\"ann-1\",\"comment\":\"test comment\",\"createdAt\":\"2026-09-14T00:01:00.000Z\"}\n",
+    );
+
+    let (mut command, log) = command(&dir, "copy-context");
+    let output = command.output().expect("run");
+    assert!(output.status.success(), "{output:?}");
+
+    let invocation = fs::read_to_string(log).expect("Herdr call");
+    assert!(
+        invocation.contains("clipboard\nset\n--stdin\n"),
+        "{invocation}"
+    );
+    let stdin = fs::read_to_string(dir.join("herdr.stdin")).expect("clipboard stdin");
+    assert!(stdin.contains("# Annotated context"), "{stdin}");
+    assert!(stdin.contains("hello"), "{stdin}");
+    assert!(stdin.contains("test comment"), "{stdin}");
     let _ = fs::remove_dir_all(dir);
 }
 
@@ -141,5 +174,56 @@ fn failed_editor_open_removes_the_pending_file_and_reports_failure() {
         .filter(|entry| entry.file_name().to_string_lossy().starts_with("pending-"))
         .count();
     assert_eq!(pending_count, 0);
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn copy_archive_failure_preserves_active_annotations_and_does_not_archive() {
+    let dir = directory();
+    let initial_records = "{\"selectedText\":\"hello\",\"capturedAt\":\"2026-09-14T00:00:00.000Z\",\"context\":{},\"id\":\"ann-1\",\"comment\":\"test comment\",\"createdAt\":\"2026-09-14T00:01:00.000Z\"}\n";
+    let state = write_annotation(&dir, initial_records);
+
+    let (mut command, _) = command(&dir, "copy-archive");
+    command.env("HERDR_TEST_EXIT", "1");
+    let output = command.output().expect("run");
+    assert!(!output.status.success(), "{output:?}");
+
+    let active = fs::read_to_string(state.join("annotations.jsonl")).expect("active annotations");
+    assert_eq!(active, initial_records);
+    assert!(!state.join("archives.jsonl").exists());
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn copy_archive_success_archives_and_clears_active() {
+    let dir = directory();
+    let initial_records = "{\"selectedText\":\"hello\",\"capturedAt\":\"2026-09-14T00:00:00.000Z\",\"context\":{\"workspace_id\":\"workspace-1\"},\"id\":\"ann-1\",\"comment\":\"test comment\",\"createdAt\":\"2026-09-14T00:01:00.000Z\"}\n";
+    let state = write_annotation(&dir, initial_records);
+
+    let (mut command, log) = command(&dir, "copy-archive");
+    let output = command.output().expect("run");
+    assert!(output.status.success(), "{output:?}");
+    let invocation = fs::read_to_string(log).expect("Herdr call");
+    assert!(
+        invocation.contains("clipboard\nset\n--stdin\n"),
+        "{invocation}"
+    );
+    let stdin = fs::read_to_string(dir.join("herdr.stdin")).expect("clipboard stdin");
+    assert!(stdin.contains("# Annotated context"), "{stdin}");
+    assert!(stdin.contains("hello"), "{stdin}");
+
+    let active = fs::read_to_string(state.join("annotations.jsonl")).expect("active annotations");
+    assert!(active.trim().is_empty());
+
+    let archives_content = fs::read_to_string(state.join("archives.jsonl")).expect("archives");
+    let archive_json: Value = serde_json::from_str(archives_content.trim()).expect("archive json");
+    let archived_annotations = archive_json
+        .get("annotations")
+        .and_then(Value::as_array)
+        .expect("archived annotations array");
+    assert_eq!(archived_annotations.len(), 1);
+    let expected_annotation: Value =
+        serde_json::from_str(initial_records.trim()).expect("initial record json");
+    assert_eq!(archived_annotations.first(), Some(&expected_annotation));
     let _ = fs::remove_dir_all(dir);
 }

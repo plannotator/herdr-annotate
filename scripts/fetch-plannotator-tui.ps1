@@ -9,6 +9,7 @@ if (-not $version) { throw "plannotator-tui.version is empty" }
 $destinationDirectory = Join-Path (Get-Location).Path "bin"
 $destination = Join-Path $destinationDirectory "plannotator-tui.exe"
 $stamp = Join-Path $destinationDirectory "plannotator-tui.version"
+$targetFile = Join-Path $destinationDirectory "plannotator-tui.target"
 New-Item -ItemType Directory -Force $destinationDirectory | Out-Null
 
 $localOverride = [Environment]::GetEnvironmentVariable("PLANNOTATOR_TUI_BIN", "Process")
@@ -18,9 +19,41 @@ $installed = if (Test-Path -LiteralPath $stamp -PathType Leaf) {
 } else {
   ""
 }
+$installedTarget = if (Test-Path -LiteralPath $targetFile -PathType Leaf) {
+  ([string](Get-Content -LiteralPath $targetFile -Raw)).Trim()
+} else {
+  ""
+}
+
+$architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+$target = switch ($architecture) {
+  "X64" { "x86_64-pc-windows-msvc" }
+  "Arm64" { "aarch64-pc-windows-msvc" }
+  default { "unknown" }
+}
+if ($target -eq "unknown") {
+  if (Get-Command "node" -ErrorAction SilentlyContinue) {
+    try {
+      $nodeArch = (& node -e "console.log(process.arch)").Trim()
+      if ($nodeArch -eq "arm64") { $target = "aarch64-pc-windows-msvc" }
+      elseif ($nodeArch -eq "x64") { $target = "x86_64-pc-windows-msvc" }
+    } catch {}
+  }
+}
+
+function Test-RunnableAndMatches {
+  if (-not (Test-Path -LiteralPath $destination -PathType Leaf)) { return $false }
+  if ($installedTarget -and $target -ne "unknown" -and $installedTarget -ne $target) {
+    return $false
+  }
+  return $true
+}
 
 if ((Test-Path -LiteralPath $destination -PathType Leaf) -and
-    $installed -eq $version -and -not $hasLocalOverride) {
+    $installed -eq $version -and (Test-RunnableAndMatches) -and -not $hasLocalOverride) {
+  if (-not (Test-Path -LiteralPath $targetFile -PathType Leaf) -and $target -ne "unknown") {
+    Set-Content -LiteralPath $targetFile -NoNewline -Value $target
+  }
   Write-Output "plannotator-tui $version already installed"
   exit 0
 }
@@ -55,6 +88,9 @@ function Install-PlannotatorTui {
     }
     $replacementCompleted = $true
     Set-Content -LiteralPath $stamp -NoNewline -Value $version
+    if ($target -ne "unknown") {
+      Set-Content -LiteralPath $targetFile -NoNewline -Value $target
+    }
   } catch {
     $installFailure = $_
     if ($replacementCompleted) {
@@ -100,11 +136,8 @@ if ($hasLocalOverride) {
 }
 
 try {
-  $architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
-  $target = switch ($architecture) {
-    "X64" { "x86_64-pc-windows-msvc" }
-    "Arm64" { "aarch64-pc-windows-msvc" }
-    default { throw "no plannotator-tui release target for Windows/$architecture" }
+  if ($target -eq "unknown") {
+    throw "no plannotator-tui release target for Windows/$architecture"
   }
 
   $asset = "plannotator-tui-$target.exe"
