@@ -183,3 +183,8 @@ try {
   )
   exit 0
 }
+
+# Explicit rather than falling off the end: the windows-full wrapper propagates
+# $LASTEXITCODE, which a script ending without an exit leaves undefined or at whatever
+# the last native command set.
+exit 0
