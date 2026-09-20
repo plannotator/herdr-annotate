@@ -32,7 +32,11 @@ $stamp = [System.IO.Path]::Combine($destinationDirectory, "plannotator-tui.versi
 [System.IO.Directory]::CreateDirectory($destinationDirectory) | Out-Null
 
 $localOverride = [Environment]::GetEnvironmentVariable("PLANNOTATOR_TUI_BIN", "Process")
-$hasLocalOverride = $null -ne $localOverride
+# Empty counts as absent, as it does for PLANNOTATOR_TUI_RELEASE_BASE below and in the
+# Unix fetcher: a caller clearing the name through an API that binds $null as
+# "" leaves it defined, and an empty override would otherwise reach the "is not a file"
+# throw, which sits outside the warn-and-exit-zero path and fails the build outright.
+$hasLocalOverride = -not [string]::IsNullOrWhiteSpace($localOverride)
 $installed = if (Test-Path -LiteralPath $stamp -PathType Leaf) {
   ([string](Get-Content -LiteralPath $stamp -Raw)).Trim()
 } else {
