@@ -268,6 +268,14 @@ def check_windows_full(path: Path, root_path: Path) -> None:
         # pointing at binaries that were never fetched.
         if "platforms" in item:
             fail(path, f"a build carries a platform gate: {item['platforms']!r}")
+        # A pinned command string still has to name a file that exists. The target is
+        # resolved from the manifest's own directory, which is the plugin root Herdr runs
+        # the build from, rather than from whatever directory this check was started in.
+        command = item.get("command", [])
+        target = command[command.index("-File") + 1]
+        script = (path.parent / target).resolve()
+        if not script.is_file():
+            fail(path, f"build script {target!r} does not exist at {script}")
 
     # Parity is the point of the variant: the same surface, reached a different way.
     if surface(path, manifest, "actions") != surface(root_path, root, "actions"):
