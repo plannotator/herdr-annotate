@@ -23,16 +23,16 @@ There is no runtime to install. Both installs download a small prebuilt `herdr-a
 
 On Linux, install `wl-clipboard`, `xclip`, or `xsel` for clipboard access.
 
-On Windows, native Herdr plugin support is preview/best-effort. Clipboard access uses PowerShell; no extra clipboard package is required. The install, keybinding, configuration check, reload, and use instructions below also apply on Windows.
+On Windows, native Herdr plugin support is preview/best-effort. Lite installs on Herdr 0.8.0 or later; Full installs through the Windows Full variant below, which needs Herdr 0.9.0 or later. Clipboard access uses PowerShell; no extra clipboard package is required. The install, keybinding, configuration check, reload, and use instructions below also apply on Windows.
 
 ## Install
 
-Pick one. Installing the other later just swaps it (same plugin id). An install stays on the commit it came from; run the same command again to move to the current release.
+Pick one. Installing another later just swaps it (same plugin id). An install stays on the commit it came from; run the same command again to move to the current release.
 
 <img src="assets/install-full.svg" width="200" align="left" alt="Full">
 
 **Full:** annotate terminal text, review documents and agent replies, send feedback to the agent.
-Wraps [Plannotator TUI](https://github.com/plannotator/plannotator-tui) (macOS and Linux today). [Demo](https://x.com/plannotator/status/2093419561077154287)
+Wraps [Plannotator TUI](https://github.com/plannotator/plannotator-tui) (macOS and Linux; Windows via the windows-full variant below). [Demo](https://x.com/plannotator/status/2093419561077154287)
 
 ```sh
 herdr plugin install plannotator/herdr-annotate
@@ -49,6 +49,16 @@ herdr plugin install plannotator/herdr-annotate/lite
 ```
 
 <br clear="all">
+
+**Windows Full (preview):** the Full install on Windows, opt-in. Requires Herdr 0.9.0 or later on Windows.
+
+```sh
+herdr plugin install plannotator/herdr-annotate/windows-full
+```
+
+It stages `plannotator-tui` natively, so no launcher sits between Herdr and the TUI. It shares the same native runtime as the Lite and Full installs, so annotations and archives stay in one place.
+
+This is a preview. The pane and path handling were verified on Windows 11 x86_64 ([PR #49](https://github.com/plannotator/herdr-annotate/pull/49), [issue #43](https://github.com/plannotator/herdr-annotate/issues/43)). Native ARM64 is untested. Report results on [issue #43](https://github.com/plannotator/herdr-annotate/issues/43).
 
 > **Required.** Bind the keys in Herdr's config.
 
