@@ -37,7 +37,7 @@ printf '\e]8;;file://%s\e\\%s\e]8;;\e\\\n' "$PWD/docs/plans/auth.md" "docs/plans
 If `plannotator-tui` is not on `PATH`, the raw Herdr command is:
 
 ```bash
-herdr plugin pane open --plugin plannotator-tui --entrypoint doc --placement split \
+herdr plugin pane open --plugin annotate --entrypoint doc --placement split \
   --direction right --target-pane "$HERDR_PANE_ID" --focus --cwd "$PWD" \
   --env PLANNOTATOR_TUI_FILE="$PWD/docs/plans/auth.md" --env PLANNOTATOR_TUI_DELIVER_TO="$HERDR_PANE_ID"
 ```
