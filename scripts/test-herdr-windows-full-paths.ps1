@@ -32,6 +32,11 @@ function Assert-True {
 }
 
 $results = [ordered]@{}
+# Both are read by the finally below, and under Set-StrictMode reading an unset variable
+# is itself an error -- a failure before the UNC probe would report that instead of its
+# own cause.
+$uncUsable = $false
+$uncRoot = $null
 
 try {
   New-Item -ItemType Directory -Force $suiteRoot | Out-Null
