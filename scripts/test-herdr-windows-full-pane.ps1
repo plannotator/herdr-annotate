@@ -51,7 +51,8 @@ $isolatedNames = @(
   "HERDR_SOCKET_PATH",
   "HERDR_CLIENT_SOCKET_PATH",
   "PLANNOTATOR_TUI_BIN",
-  "PLANNOTATOR_TUI_RELEASE_BASE"
+  "PLANNOTATOR_TUI_RELEASE_BASE",
+  "HERDR_ANNOTATE_BIN"
 )
 $oldEnvironment = @{}
 foreach ($name in $isolatedNames) {
