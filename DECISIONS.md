@@ -37,6 +37,12 @@ The existing integration test harness in `rust/tests/commands.rs` used a shell s
 ### D4: No second clipboard transport
 Global copies stay on `herdr clipboard set --stdin` only. OSC 52 remains the pane-manager path (it needs a PTY). Do not add VPN clipboard sinks, extra RPC, or silent local-OS fallbacks for `copy-context` / `copy-archive`. Wait for fleet Herdr to grow `clipboard set`.
 
+### D5: Platform-Aware Binary Resolution and Cross-Machine Distribution (EMO-404)
+In a multi-machine environment, local staging (`scripts/stage-local.sh`) or git/rsync syncs the `bin/` directory from a macOS development host to remote fleet targets (`spark0`/`spark1` on Linux aarch64, `emo-win` on Linux x86_64 / Windows). Previously, `fetch-herdr-annotate.sh` and `fetch-herdr-annotate.ps1` checked only whether `bin/herdr-annotate.exe` was executable and its version stamp matched `herdr-annotate.version`. Because permissions and version files were preserved during sync, the fetcher short-circuited with "already installed", leaving incompatible Mach-O arm64 binaries on Linux and Windows.
+- Platform detection: detect OS and architecture via `uname -s`/`uname -m` (supporting Darwin arm64/x86_64, Linux aarch64/x86_64, Windows Git Bash / MSYS / CYGWIN, and PowerShell `$architecture`), with fallback to `process.platform` / `process.arch` via Node/Bun.
+- Binary verification: verify that any existing binary actually executes on the host OS via `--version` and matches the host target stamp in `bin/herdr-annotate.target` (and `bin/plannotator-tui.target`) before allowing an idempotent skip.
+- Native fallback build: if prebuilt download is unavailable or fails (e.g. offline fleet boxes), automatically invoke `cargo build --manifest-path rust/Cargo.toml --release` to compile and stage the native binary.
+
 ## Tradeoffs
 
 - **Client clipboard vs OSC 52:** OSC 52 can only be emitted from an active terminal pane with direct PTY output. Global plugin actions (`annotate.copy-context`, `annotate.copy-archive`) run out-of-band without an attached PTY window. Herdr's RPC endpoint (`herdr clipboard set --stdin`) is therefore the only reliable route for global copy actions.

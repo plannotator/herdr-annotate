@@ -75,6 +75,8 @@ try {
     Assert-True ($result.ExitCode -eq 0) "local override failed: $($result.Output)"
     Assert-BytesEqual $source $destination "local override bytes differ"
     Assert-True ((Get-Content -LiteralPath $stamp -Raw) -ceq "0.8.0") "local stamp differs"
+    $targetFile = Join-Path $pluginRoot "bin/plannotator-tui.target"
+    Assert-True (Test-Path -LiteralPath $targetFile -PathType Leaf) "target stamp file missing"
 
     $env:PLANNOTATOR_TUI_BIN = $null
     $env:PLANNOTATOR_TUI_RELEASE_BASE = "http://127.0.0.1:1/must-not-be-requested"
@@ -86,6 +88,13 @@ try {
       (Get-FileHash -Algorithm SHA256 -LiteralPath $destination).Hash -ceq $beforeHash
     ) "idempotent run replaced the destination"
 
+    # If target is mismatched, must not short-circuit
+    Set-Content -LiteralPath $targetFile -NoNewline -Value "mismatched-target"
+    $env:PLANNOTATOR_TUI_BIN = $source
+    $result = Invoke-Fetcher
+    Assert-True ($result.ExitCode -eq 0) "fetch with mismatched target failed: $($result.Output)"
+    Assert-True ($result.Output -notmatch "already installed") "mismatched target incorrectly short-circuited"
+    Assert-True ($result.Output -match "installed plannotator-tui") "mismatched target did not install: $($result.Output)"
     $env:PLANNOTATOR_TUI_BIN = Join-Path $testRoot "missing explicit override.exe"
     $result = Invoke-Fetcher
     Assert-True ($result.ExitCode -ne 0) "missing explicit override exited successfully"

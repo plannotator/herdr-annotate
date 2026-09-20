@@ -64,12 +64,12 @@ pub fn write_client_clipboard(text: &str) -> Result<(), String> {
         .spawn()
         .map_err(|_| "herdr clipboard set failed".to_owned())?;
 
-    if let Some(mut stdin) = child.stdin.take() {
-        if stdin.write_all(text.as_bytes()).is_err() {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err("herdr clipboard set failed".to_owned());
-        }
+    if let Some(mut stdin) = child.stdin.take()
+        && stdin.write_all(text.as_bytes()).is_err()
+    {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err("herdr clipboard set failed".to_owned());
     }
 
     let output = child

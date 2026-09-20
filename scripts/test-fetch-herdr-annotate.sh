@@ -26,6 +26,7 @@ printf 'old-version' > "$plugin_root/bin/herdr-annotate.version"
 HERDR_ANNOTATE_BIN="$source_binary" bash "$plugin_root/scripts/fetch-herdr-annotate.sh"
 cmp "$source_binary" "$plugin_root/bin/herdr-annotate.exe"
 test "$(cat "$plugin_root/bin/herdr-annotate.version")" = "$version"
+test -f "$plugin_root/bin/herdr-annotate.target"
 test ! -e "$plugin_root/bin/herdr-annotate"
 test "$("$plugin_root/bin/herdr-annotate.exe" --version)" = "herdr-annotate $version"
 
@@ -33,6 +34,26 @@ output="$(bash "$plugin_root/scripts/fetch-herdr-annotate.sh")"
 case "$output" in
   *"already installed"*) ;;
   *) echo "idempotent fetch did not short-circuit: $output" >&2; exit 1 ;;
+esac
+
+# If a target file is mismatched, the fetcher must not claim already-installed
+printf 'mismatched-target\n' > "$plugin_root/bin/herdr-annotate.target"
+output="$(HERDR_ANNOTATE_BIN="$source_binary" bash "$plugin_root/scripts/fetch-herdr-annotate.sh")"
+case "$output" in
+  *"already installed"*) echo "mismatched target incorrectly short-circuited" >&2; exit 1 ;;
+  *"installed herdr-annotate"*) ;;
+  *) echo "unexpected output on mismatched target: $output" >&2; exit 1 ;;
+esac
+
+# If an existing binary is unrunnable (simulating wrong-arch Mach-O binary on Linux),
+# the fetcher must not claim already-installed
+printf 'corrupt unrunnable binary' > "$plugin_root/bin/herdr-annotate.exe"
+chmod +x "$plugin_root/bin/herdr-annotate.exe"
+output="$(HERDR_ANNOTATE_BIN="$source_binary" bash "$plugin_root/scripts/fetch-herdr-annotate.sh")"
+case "$output" in
+  *"already installed"*) echo "unrunnable binary incorrectly short-circuited" >&2; exit 1 ;;
+  *"installed herdr-annotate"*) ;;
+  *) echo "unexpected output on unrunnable binary: $output" >&2; exit 1 ;;
 esac
 
 before="$(cat "$plugin_root/bin/herdr-annotate.exe")"

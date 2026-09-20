@@ -224,6 +224,6 @@ fn copy_archive_success_archives_and_clears_active() {
     assert_eq!(archived_annotations.len(), 1);
     let expected_annotation: Value =
         serde_json::from_str(initial_records.trim()).expect("initial record json");
-    assert_eq!(archived_annotations[0], expected_annotation);
+    assert_eq!(archived_annotations.first(), Some(&expected_annotation));
     let _ = fs::remove_dir_all(dir);
 }
