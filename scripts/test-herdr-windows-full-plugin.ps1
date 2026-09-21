@@ -130,7 +130,7 @@ try {
       Assert-True ($platforms.Count -eq 0 -or $platforms -contains "windows") `
         "action $id is not effective on Windows: $($platforms -join ',')"
     }
-    Assert-True ($actionIds.Count -eq 7) "Herdr $version listed $($actionIds.Count) actions, expected 7"
+    Assert-True ($actionIds.Count -eq 8) "Herdr $version listed $($actionIds.Count) actions, expected 7"
 
     $paneIds = @($plugin.panes | ForEach-Object { $_.id })
     foreach ($id in @("editor", "manager", "doc")) {
@@ -155,7 +155,7 @@ try {
     $handler = @($plugin.link_handlers | Where-Object { $_.id -ceq "markdown-file" })
     Assert-True ($handler.Count -eq 1) "Herdr $version omitted the markdown-file link handler"
 
-    Write-Output "herdr $version accepts windows-full: 7 actions, 3 panes, direct-argv doc pane"
+    Write-Output "herdr $version accepts windows-full: 8 actions, 3 panes, direct-argv doc pane"
   }
 } finally {
   foreach ($name in $isolatedNames) {
