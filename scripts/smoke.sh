@@ -97,7 +97,7 @@ trap restore EXIT
 
 echo "== fresh install: full"
 install "$spec"
-check "actions" "$(actions)" "capture,copy-archive,copy-context,last,manage,open,open-link"
+check "actions" "$(actions)" "capture,copy-archive,copy-context,last,last-newest,manage,open,open-link"
 check "action programs" "$(programs)" "./bin/herdr-annotate.exe,./bin/plannotator-tui.exe"
 check "review binary matches pin" "$(tui_version)" "$(tui_pin)"
 check "native binary matches pin" "$(native_version)" "$(native_pin)"
@@ -134,7 +134,7 @@ check "manager pane" "$(manager_renders)" "ok"
 
 echo "== swap: lite -> full"
 install "$spec"
-check "actions" "$(actions)" "capture,copy-archive,copy-context,last,manage,open,open-link"
+check "actions" "$(actions)" "capture,copy-archive,copy-context,last,last-newest,manage,open,open-link"
 check "review binary" "$(tui_version)" "$(tui_pin)"
 check "native binary" "$(native_version)" "$(native_pin)"
 
