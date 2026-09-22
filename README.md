@@ -178,7 +178,8 @@ Full install. Works with Claude Code, Codex, pi, Copilot CLI, Droid, Oh My Pi, H
 | `Ctrl+B Ctrl+O` | the agent's newest reply, with no picker |
 | Ctrl-click a `file://…md` link | that file |
 
-**Send** (or `E`) makes the review the agent's next message. `q` closes.
+**Send** (or `E`) makes the review the agent's next message. `q` closes. On an agent reply, `S`
+sends and closes in one key; `E` and `q` are unchanged.
 
 | Option | Where |
 |---|---|
