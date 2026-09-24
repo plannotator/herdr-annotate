@@ -86,6 +86,18 @@ command = "annotate.copy-archive"
 description = "copy annotations as context and archive them"
 
 [[keys.command]]
+key = "prefix+ctrl+v"
+type = "plugin_action"
+command = "annotate.paste-archive"
+description = "paste annotations into the agent's prompt and archive them"
+
+[[keys.command]]
+key = "prefix+ctrl+s"
+type = "plugin_action"
+command = "annotate.send-archive"
+description = "send annotations to the agent and archive them"
+
+[[keys.command]]
 key = "prefix+m"
 type = "plugin_action"
 command = "annotate.manage"
@@ -136,6 +148,18 @@ command = "annotate.copy-archive"
 description = "copy annotations as context and archive them"
 
 [[keys.command]]
+key = "prefix+ctrl+v"
+type = "plugin_action"
+command = "annotate.paste-archive"
+description = "paste annotations into the agent's prompt and archive them"
+
+[[keys.command]]
+key = "prefix+ctrl+s"
+type = "plugin_action"
+command = "annotate.send-archive"
+description = "send annotations to the agent and archive them"
+
+[[keys.command]]
 key = "prefix+m"
 type = "plugin_action"
 command = "annotate.manage"
@@ -160,12 +184,19 @@ herdr server reload-config
 | `Ctrl+B A` | comment on the selected text · `Ctrl+S` saves |
 | `Ctrl+B Shift+A` | copy all annotations as Markdown |
 | `Ctrl+B Ctrl+A` | copy all annotations as Markdown, then archive them |
+| `Ctrl+B Ctrl+V` | paste all annotations into the focused agent's prompt without sending, then archive them |
+| `Ctrl+B Ctrl+S` | send all annotations as the focused agent's next message, then archive them |
 | `Ctrl+B M` | manage · `y` copy one · `c` copy all · `Shift+C` copy and archive · `Tab` archives (`y` copy · `u` restore · `d d` delete) |
 
 Copies made inside the manager pane also emit OSC 52, so on Herdr 0.9.0 they reach the clipboard of
 the machine you are viewing from even when the plugin runs on a remote server with no clipboard tool
 installed; `Ctrl+B Shift+A` and `Ctrl+B Ctrl+A` do not, because those actions run outside a pane and
 have no terminal to write to.
+
+`Ctrl+B Ctrl+V` and `Ctrl+B Ctrl+S` skip the clipboard and put the same Markdown straight into the
+prompt of the agent in the focused pane. When that pane has no agent Herdr recognises, or the agent
+is waiting at an approval or question prompt, they refuse, type nothing, and leave your
+annotations active.
 
 ### Review documents and agent replies
 

@@ -58,6 +58,20 @@ contexts = ["global"]
 command = ["../bin/herdr-annotate.exe", "copy-archive"]
 
 [[actions]]
+id = "paste-archive"
+title = "Paste annotations into the agent's prompt and archive them"
+description = "Paste all saved annotations into the focused agent's prompt without sending, then archive them."
+contexts = ["pane"]
+command = ["../bin/herdr-annotate.exe", "paste-archive"]
+
+[[actions]]
+id = "send-archive"
+title = "Send annotations to the agent and archive them"
+description = "Send all saved annotations as the focused agent's next message, then archive them."
+contexts = ["pane"]
+command = ["../bin/herdr-annotate.exe", "send-archive"]
+
+[[actions]]
 id = "manage"
 title = "Manage annotations"
 description = "Browse, copy, archive, restore, and delete annotations."
