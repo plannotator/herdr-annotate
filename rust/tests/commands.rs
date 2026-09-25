@@ -181,7 +181,7 @@ const FOCUSED: &str = r#"{"focused_pane_id":"w1:p2"}"#;
 
 fn agent_record(status: &str) -> String {
     format!(
-        r#"{{"id":"cli:agent:get","result":{{"agent":{{"agent_status":"{status}","pane_id":"w1:p2"}},"type":"agent_info"}}}}"#
+        r#"{{"id":"cli:agent:get","result":{{"agent":{{"agent":"claude","agent_status":"{status}","pane_id":"w1:p2"}},"type":"agent_info"}}}}"#
     )
 }
 
@@ -231,10 +231,17 @@ fn remove(state: &Path) {
 
 #[test]
 fn send_archive_prompts_the_focused_agent_then_archives() {
-    let (output, calls, state) = deliver("send-archive", Some(FOCUSED), &[]);
+    let record = agent_record("idle");
+    let (output, calls, state) = deliver(
+        "send-archive",
+        Some(FOCUSED),
+        &[("HERDR_TEST_AGENT_GET", &record)],
+    );
     assert!(output.status.success(), "{output:?}");
     assert!(
-        calls.starts_with("agent\nprompt\nw1:p2\n# Annotated context\n\n## Annotation 1\n"),
+        calls.starts_with(
+            "agent\nget\nw1:p2\n--\nagent\nprompt\nw1:p2\n# Annotated context\n\n## Annotation 1\n"
+        ),
         "{calls}"
     );
     assert!(calls.find("second selection") < calls.find("first selection"));
@@ -293,10 +300,12 @@ fn paste_archive_refuses_a_blocked_agent_and_keeps_the_store() {
 
 #[test]
 fn send_archive_turns_herdrs_refusal_into_words_and_keeps_the_store() {
+    let record = agent_record("idle");
     let (output, calls, state) = deliver(
         "send-archive",
         Some(FOCUSED),
         &[
+            ("HERDR_TEST_AGENT_GET", &record),
             ("HERDR_TEST_FAIL", "agent prompt"),
             (
                 "HERDR_TEST_STDERR",
@@ -311,6 +320,56 @@ fn send_archive_turns_herdrs_refusal_into_words_and_keeps_the_store() {
              No agent is running in the focused pane. Nothing was sent; your annotations are still active.\n--\n"
         ),
         "{calls}"
+    );
+    assert_eq!(active(&state), SEEDED);
+    assert_eq!(archived(&state), 0);
+    remove(&state);
+}
+
+/// Herdr before 0.8.2 types `agent prompt` text into an approval dialog, so send-archive must
+/// refuse on the `agent get` answer and never reach `agent prompt`.
+#[test]
+fn send_archive_refuses_an_agent_that_is_not_ready_without_prompting() {
+    let blocked = agent_record("blocked");
+    let exited = r#"{"id":"cli:agent:get","result":{"agent":{"name":"reviewer","agent_status":"idle","pane_id":"w1:p2"},"type":"agent_info"}}"#;
+    let launching = r#"{"id":"cli:agent:get","result":{"agent":{"agent":"claude","agent_status":"unknown","launch_pending":true,"pane_id":"w1:p2"},"type":"agent_info"}}"#;
+    for (record, reason) in [
+        (blocked.as_str(), "The agent is waiting on a prompt."),
+        (exited, "No agent is running in the focused pane."),
+        (launching, "The agent is not ready for input yet."),
+    ] {
+        let (output, calls, state) = deliver(
+            "send-archive",
+            Some(FOCUSED),
+            &[("HERDR_TEST_AGENT_GET", record)],
+        );
+        assert!(!output.status.success(), "{reason}");
+        assert_eq!(
+            calls,
+            format!(
+                "agent\nget\nw1:p2\n--\nnotification\nshow\nSend failed\n--body\n\
+                 {reason} Nothing was sent; your annotations are still active.\n--\n"
+            )
+        );
+        assert_eq!(active(&state), SEEDED);
+        assert_eq!(archived(&state), 0);
+        remove(&state);
+    }
+}
+
+#[test]
+fn paste_archive_refuses_a_pane_whose_agent_exited() {
+    let exited = r#"{"id":"cli:agent:get","result":{"agent":{"name":"reviewer","agent_status":"unknown","pane_id":"w1:p2"},"type":"agent_info"}}"#;
+    let (output, calls, state) = deliver(
+        "paste-archive",
+        Some(FOCUSED),
+        &[("HERDR_TEST_AGENT_GET", exited)],
+    );
+    assert!(!output.status.success());
+    assert_eq!(
+        calls,
+        "agent\nget\nw1:p2\n--\nnotification\nshow\nPaste failed\n--body\n\
+         No agent is running in the focused pane. Nothing was pasted; your annotations are still active.\n--\n"
     );
     assert_eq!(active(&state), SEEDED);
     assert_eq!(archived(&state), 0);

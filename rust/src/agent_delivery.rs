@@ -3,8 +3,11 @@
 //! Sending uses `herdr agent prompt`, which pastes the text as a bracketed paste and presses
 //! Enter. Herdr has no paste-without-Enter command, and `herdr pane send-text` writes raw bytes
 //! without honouring the pane's bracketed-paste mode, so pasting wraps the text itself. Agent
-//! TUIs enable bracketed paste; a bare shell may not and would show the markers as garbage, so a
-//! paste is only delivered to a pane that hosts a recognised agent not waiting at a dialog.
+//! TUIs enable bracketed paste; a bare shell may not and would show the markers as garbage.
+//!
+//! Both deliveries first ask `herdr agent get` whether the agent is ready, mirroring the checks
+//! `herdr agent prompt` makes before writing. Herdr before 0.8.2 lets `agent prompt` type into an
+//! approval dialog, so the plugin cannot rely on Herdr refusing a blocked agent by itself.
 
 use serde_json::Value;
 
@@ -76,27 +79,43 @@ fn refusal_reason(error: &HerdrError) -> String {
     }
 }
 
-/// Decide from one `herdr agent get` result whether a bracketed paste is safe to deliver.
+/// Decide from one `herdr agent get` result whether the agent can take text in its prompt.
 ///
-/// The pane must host a recognised agent, and that agent must not sit at an approval or question
-/// dialog, where pasted text would answer the dialog instead of reaching the prompt.
-pub fn paste_guard(agent_get: &Result<String, String>) -> Result<(), String> {
+/// Mirrors what `herdr agent prompt` checks before it writes: the agent must not sit at an
+/// approval or question dialog, where the text would answer the dialog instead of reaching the
+/// prompt; Herdr must still recognise a running agent in the pane (`agent` is cleared when the
+/// agent process exits, even though a named pane still answers `agent get`); and a managed launch
+/// must have finished (`launch_pending` is omitted once it has).
+pub fn agent_ready(agent_get: &Result<String, String>) -> Result<(), String> {
     let record = agent_get
         .as_ref()
         .map_err(|stderr| refusal_reason(&parse_herdr_error(stderr)))?;
-    let status = serde_json::from_str::<Value>(record)
-        .ok()
-        .and_then(|value| {
-            value
-                .pointer("/result/agent/agent_status")
-                .and_then(Value::as_str)
-                .map(str::to_owned)
-        });
-    match status.as_deref() {
-        Some("blocked") => Err("The agent is waiting on a prompt.".to_owned()),
-        Some(_) => Ok(()),
-        None => Err("Herdr did not report the agent's state.".to_owned()),
+    let parsed = serde_json::from_str::<Value>(record).ok();
+    let Some(agent) = parsed
+        .as_ref()
+        .and_then(|value| value.pointer("/result/agent"))
+        .filter(|agent| agent.get("agent_status").and_then(Value::as_str).is_some())
+    else {
+        return Err("Herdr did not report the agent's state.".to_owned());
+    };
+    if agent.get("agent_status").and_then(Value::as_str) == Some("blocked") {
+        return Err("The agent is waiting on a prompt.".to_owned());
     }
+    let recognised = agent
+        .get("agent")
+        .and_then(Value::as_str)
+        .is_some_and(|name| !name.is_empty());
+    if !recognised {
+        return Err("No agent is running in the focused pane.".to_owned());
+    }
+    if agent
+        .get("launch_pending")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return Err("The agent is not ready for input yet.".to_owned());
+    }
+    Ok(())
 }
 
 /// Remove ESC so the text cannot end a bracketed paste early.
@@ -137,27 +156,12 @@ pub fn deliver_to_agent(
         ));
     };
     let herdr_refused = |stderr: String| refused(refusal_reason(&parse_herdr_error(&stderr)));
-    match delivery {
-        Delivery::Send => herdr(&arguments(&[
-            "agent",
-            "prompt",
-            pane,
-            &without_escapes(text),
-        ]))
-        .map(drop)
-        .map_err(herdr_refused),
-        Delivery::Paste => {
-            paste_guard(&herdr(&arguments(&["agent", "get", pane]))).map_err(refused)?;
-            herdr(&arguments(&[
-                "pane",
-                "send-text",
-                pane,
-                &bracketed_paste(text),
-            ]))
-            .map(drop)
-            .map_err(herdr_refused)
-        }
-    }
+    agent_ready(&herdr(&arguments(&["agent", "get", pane]))).map_err(refused)?;
+    let write = match delivery {
+        Delivery::Send => arguments(&["agent", "prompt", pane, &without_escapes(text)]),
+        Delivery::Paste => arguments(&["pane", "send-text", pane, &bracketed_paste(text)]),
+    };
+    herdr(&write).map(drop).map_err(herdr_refused)
 }
 
 fn arguments(values: &[&str]) -> Vec<String> {
@@ -280,28 +284,83 @@ mod tests {
         assert_eq!(reason(""), "Herdr failed without saying why.");
     }
 
+    fn agent_info(agent: &str) -> String {
+        format!(r#"{{"id":"cli:agent:get","result":{{"agent":{agent},"type":"agent_info"}}}}"#)
+    }
+
     #[test]
-    fn the_paste_guard_admits_only_a_recognised_agent_not_at_a_dialog() {
+    fn a_recognised_agent_not_at_a_dialog_is_ready() {
         for status in ["idle", "working", "done", "unknown"] {
-            assert_eq!(paste_guard(&Ok(agent_record(status))), Ok(()), "{status}");
+            assert_eq!(agent_ready(&Ok(agent_record(status))), Ok(()), "{status}");
         }
         assert_eq!(
-            paste_guard(&Ok(agent_record("blocked"))),
+            agent_ready(&Ok(agent_info(
+                r#"{"agent":"pi","agent_status":"idle","launch_pending":false,"pane_id":"w1:p2"}"#
+            ))),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn a_blocked_agent_is_not_ready() {
+        assert_eq!(
+            agent_ready(&Ok(agent_record("blocked"))),
             Err("The agent is waiting on a prompt.".to_owned())
         );
+    }
+
+    #[test]
+    fn an_unknown_pane_without_an_agent_is_not_ready() {
         assert_eq!(
-            paste_guard(&Err(envelope(
+            agent_ready(&Ok(agent_info(
+                r#"{"agent_status":"unknown","pane_id":"w1:p2"}"#
+            ))),
+            Err("No agent is running in the focused pane.".to_owned())
+        );
+        assert_eq!(
+            agent_ready(&Ok(agent_info(
+                r#"{"agent":"","agent_status":"unknown","pane_id":"w1:p2"}"#
+            ))),
+            Err("No agent is running in the focused pane.".to_owned())
+        );
+    }
+
+    #[test]
+    fn an_exited_named_agent_is_not_ready() {
+        // A named agent pane still answers `agent get` after its process exits, without `agent`.
+        assert_eq!(
+            agent_ready(&Ok(agent_info(
+                r#"{"name":"reviewer","agent_status":"idle","pane_id":"w1:p2"}"#
+            ))),
+            Err("No agent is running in the focused pane.".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_pending_launch_is_not_ready() {
+        assert_eq!(
+            agent_ready(&Ok(agent_info(
+                r#"{"agent":"claude","agent_status":"unknown","launch_pending":true,"pane_id":"w1:p2"}"#
+            ))),
+            Err("The agent is not ready for input yet.".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_refused_or_unreadable_agent_get_is_not_ready() {
+        assert_eq!(
+            agent_ready(&Err(envelope(
                 "agent_not_found",
                 "agent target w1:p2 not found"
             ))),
             Err("No agent is running in the focused pane.".to_owned())
         );
         assert_eq!(
-            paste_guard(&Ok("not json".to_owned())),
+            agent_ready(&Ok("not json".to_owned())),
             Err("Herdr did not report the agent's state.".to_owned())
         );
         assert_eq!(
-            paste_guard(&Ok(r#"{"result":{"agent":{}}}"#.to_owned())),
+            agent_ready(&Ok(r#"{"result":{"agent":{}}}"#.to_owned())),
             Err("Herdr did not report the agent's state.".to_owned())
         );
     }
@@ -315,20 +374,42 @@ mod tests {
             "hi\x1b[201~\rthere",
             |args| {
                 calls.borrow_mut().push(args.to_vec());
-                Ok(String::new())
+                Ok(agent_record("idle"))
             },
         );
         assert_eq!(result, Ok(()));
         assert_eq!(
             *calls.borrow(),
-            [["agent", "prompt", "w1:p2", "hi[201~\rthere"]]
+            [
+                vec!["agent", "get", "w1:p2"],
+                vec!["agent", "prompt", "w1:p2", "hi[201~\rthere"],
+            ]
         );
     }
 
     #[test]
-    fn a_blocked_send_reports_why_and_that_nothing_was_sent() {
-        let result = deliver_to_agent(Delivery::Send, Some("w1:p2"), "hi", |_| {
-            Err(envelope("agent_blocked", "agent w1:p2 is blocked"))
+    fn a_blocked_send_is_refused_before_prompting() {
+        // Herdr before 0.8.2 would type a prompt into the dialog, so the check must come first.
+        let calls = RefCell::new(Vec::new());
+        let result = deliver_to_agent(Delivery::Send, Some("w1:p2"), "hi", |args| {
+            calls.borrow_mut().push(command(args));
+            Ok(agent_record("blocked"))
+        });
+        assert_eq!(
+            result,
+            Err("The agent is waiting on a prompt. Nothing was sent; your annotations are still active.".to_owned())
+        );
+        assert_eq!(*calls.borrow(), ["agent get"]);
+    }
+
+    #[test]
+    fn herdrs_own_prompt_refusal_reports_why_and_that_nothing_was_sent() {
+        let result = deliver_to_agent(Delivery::Send, Some("w1:p2"), "hi", |args| {
+            if command(args) == "agent get" {
+                Ok(agent_record("idle"))
+            } else {
+                Err(envelope("agent_blocked", "agent w1:p2 is blocked"))
+            }
         });
         assert_eq!(
             result,
@@ -401,6 +482,42 @@ mod tests {
     }
 
     #[test]
+    fn a_send_to_an_agent_that_is_not_ready_archives_nothing() {
+        let events = RefCell::new(Vec::new());
+        let outcome = copy_and_archive_annotations(CopyAndArchiveDependencies {
+            load_active: || {
+                events.borrow_mut().push("load".to_owned());
+                Ok(vec![annotation("one")])
+            },
+            deliver: |text: String| {
+                deliver_to_agent(Delivery::Send, Some("w1:p2"), &text, |args| {
+                    events.borrow_mut().push(command(args));
+                    Ok(agent_info(
+                        r#"{"name":"reviewer","agent_status":"idle","pane_id":"w1:p2"}"#,
+                    ))
+                })
+            },
+            save_archive: |_| {
+                events.borrow_mut().push("archive".to_owned());
+                Ok(())
+            },
+            remove_active: |_| {
+                events.borrow_mut().push("remove".to_owned());
+                Ok(())
+            },
+            create_archive_id: || "archive-one".to_owned(),
+            now: || "now".to_owned(),
+        });
+        assert_eq!(
+            outcome,
+            CopyAndArchiveOutcome::StayOpen {
+                message: "No agent is running in the focused pane. Nothing was sent; your annotations are still active.".to_owned()
+            }
+        );
+        assert_eq!(*events.borrow(), ["load", "agent get"]);
+    }
+
+    #[test]
     fn a_delivered_send_is_archived_afterwards() {
         let events = RefCell::new(Vec::new());
         let prompted = RefCell::new(String::new());
@@ -412,6 +529,9 @@ mod tests {
             deliver: |text: String| {
                 deliver_to_agent(Delivery::Send, Some("w1:p2"), &text, |args| {
                     events.borrow_mut().push(command(args));
+                    if command(args) == "agent get" {
+                        return Ok(agent_record("idle"));
+                    }
                     args.get(3)
                         .cloned()
                         .unwrap_or_default()
@@ -433,7 +553,7 @@ mod tests {
         assert_eq!(outcome, CopyAndArchiveOutcome::Close { archived_count: 2 });
         assert_eq!(
             *events.borrow(),
-            ["load", "agent prompt", "archive", "remove"]
+            ["load", "agent get", "agent prompt", "archive", "remove"]
         );
         assert!(prompted.borrow().find("selection two") < prompted.borrow().find("selection one"));
     }

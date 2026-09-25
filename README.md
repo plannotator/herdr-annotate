@@ -194,9 +194,9 @@ installed; `Ctrl+B Shift+A` and `Ctrl+B Ctrl+A` do not, because those actions ru
 have no terminal to write to.
 
 `Ctrl+B Ctrl+V` and `Ctrl+B Ctrl+S` skip the clipboard and put the same Markdown straight into the
-prompt of the agent in the focused pane. When that pane has no agent Herdr recognises, or the agent
-is waiting at an approval or question prompt, they refuse, type nothing, and leave your
-annotations active.
+prompt of the agent in the focused pane. Both first ask Herdr whether the agent is ready. When
+that pane has no running agent Herdr recognises, the agent is still launching, or it is waiting at
+an approval or question prompt, they refuse, type nothing, and leave your annotations active.
 
 ### Review documents and agent replies
 
