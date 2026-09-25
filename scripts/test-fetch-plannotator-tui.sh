@@ -14,7 +14,7 @@ cp "$repository_root/plannotator-tui.version" "$plugin_root/"
 source_binary="$source_root/plannotator-tui local"
 cat > "$source_binary" <<'EOF'
 #!/usr/bin/env sh
-printf 'plannotator-tui 0.9.3\n'
+printf 'plannotator-tui 0.9.4\n'
 EOF
 chmod +x "$source_binary"
 printf 'old destination' > "$plugin_root/bin/plannotator-tui.exe"
@@ -23,10 +23,10 @@ printf 'old-version' > "$plugin_root/bin/plannotator-tui.version"
 
 PLANNOTATOR_TUI_BIN="$source_binary" bash "$plugin_root/scripts/fetch-plannotator-tui.sh"
 cmp "$source_binary" "$plugin_root/bin/plannotator-tui.exe"
-test "$(cat "$plugin_root/bin/plannotator-tui.version")" = 0.9.3
+test "$(cat "$plugin_root/bin/plannotator-tui.version")" = 0.9.4
 test ! -e "$plugin_root/bin/plannotator-tui"
-test "$("$plugin_root/bin/plannotator-tui.exe" --version)" = "plannotator-tui 0.9.3"
-test "$(bash "$plugin_root/scripts/plannotator-tui.sh" --version)" = "plannotator-tui 0.9.3"
+test "$("$plugin_root/bin/plannotator-tui.exe" --version)" = "plannotator-tui 0.9.4"
+test "$(bash "$plugin_root/scripts/plannotator-tui.sh" --version)" = "plannotator-tui 0.9.4"
 
 output="$(bash "$plugin_root/scripts/fetch-plannotator-tui.sh")"
 case "$output" in

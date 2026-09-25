@@ -1,6 +1,6 @@
 id = "annotate"
 name = "Annotate"
-version = "0.5.0"
+version = "0.6.0"
 min_herdr_version = "0.8.0"
 description = "Comment on terminal selections and copy annotations as agent context."
 platforms = ["linux", "macos", "windows"]
@@ -116,6 +116,15 @@ description = "Review the focused agent's newest message in plannotator-tui, wit
 contexts = ["pane"]
 platforms = ["macos", "linux"]
 command = ["./bin/plannotator-tui.exe", "herdr", "last", "--newest"]
+
+# No default key; bind one in Herdr's config (see the README).
+[[actions]]
+id = "terminal"
+title = "Annotate: terminal output"
+description = "Review the focused pane's recent terminal output in plannotator-tui and send feedback back."
+contexts = ["pane"]
+platforms = ["macos", "linux"]
+command = ["./bin/plannotator-tui.exe", "herdr", "terminal"]
 
 # Ctrl-click on a file:// Markdown link. Anchored on the scheme so web links never match.
 [[link_handlers]]
