@@ -34,6 +34,7 @@ requirements, not completed verification. Every box starts unchecked.
   | `open-link` | Annotate this file | `pane` |
   | `last` | Annotate: agent's last message | `pane` |
   | `last-newest` | Annotate: agent's newest message | `pane` |
+  | `terminal` | Annotate: terminal output | `pane` |
 
 - [ ] Require exactly three panes: `editor` (Annotate, popup, 88×24), `manager`
   (Annotations, popup, 100×30), and one `doc` (Annotate, overlay). The `doc`
@@ -41,8 +42,9 @@ requirements, not completed verification. Every box starts unchecked.
   No shell, PowerShell, command-string interpolation, or fallback launcher may sit
   between Herdr's pane process and the TUI.
 - [ ] Keep `open` and `open-link` as direct argv ending in `herdr open`,
-  `last` as direct argv ending in `herdr last`, and `last-newest` as direct argv
-  ending in `herdr last --newest`, all using
+  `last` as direct argv ending in `herdr last`, `last-newest` as direct argv
+  ending in `herdr last --newest`, and `terminal` as direct argv ending in
+  `herdr terminal`, all using
   `./bin/plannotator-tui.exe`. Preserve the `markdown-file` link handler's title,
   pattern, and `open-link` action. All actions, panes, the handler, and the build
   must be effective on Windows; no inherited Unix gate may disable them.

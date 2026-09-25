@@ -178,6 +178,17 @@ Full install. Works with Claude Code, Codex, pi, Copilot CLI, Droid, Oh My Pi, H
 | `Ctrl+B Ctrl+O` | the agent's newest reply, with no picker |
 | Ctrl-click a `file://…md` link | that file |
 
+`annotate.terminal` opens the focused pane's recent terminal output (the last 200 lines) for
+review in the same way. It has no default key; to use it, bind one yourself, for example:
+
+```toml
+[[keys.command]]
+key = "prefix+t"
+type = "plugin_action"
+command = "annotate.terminal"
+description = "review this pane's recent output"
+```
+
 **Send** (or `E`) makes the review the agent's next message. `q` closes. On an agent reply, `S`
 sends and closes in one key; `E` and `q` are unchanged.
 
