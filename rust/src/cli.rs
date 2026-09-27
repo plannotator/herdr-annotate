@@ -1,4 +1,4 @@
-//! One native command boundary for the six Herdr entrypoints.
+//! One native command boundary for the eight Herdr entrypoints.
 
 use std::cell::Cell;
 use std::fs::OpenOptions;
@@ -10,13 +10,14 @@ use chrono::{SecondsFormat, Utc};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::agent_delivery::{Delivery, deliver_to_agent};
 use crate::archive_workflow::{
     CopyAndArchiveDependencies, CopyAndArchiveOutcome, copy_and_archive_annotations,
 };
 use crate::clipboard::{read_clipboard, write_clipboard};
 use crate::format::format_annotations;
 use crate::handoff::take_default_handoff;
-use crate::herdr::{notify, run_herdr};
+use crate::herdr::{notify, run_herdr, run_herdr_output};
 use crate::paths::{normalize_windows_path, plugin_root, state_dir};
 use crate::store::{
     append_archived_set, load_annotations, newest_first_annotations, remove_annotations_by_id,
@@ -26,8 +27,8 @@ use crate::types::{
     selected_text_from_invocation,
 };
 
-const USAGE: &str =
-    "Usage: herdr-annotate <capture|copy-context|copy-archive|editor|manage|manager>";
+const USAGE: &str = "Usage: herdr-annotate \
+    <capture|copy-context|copy-archive|paste-archive|send-archive|editor|manage|manager>";
 
 /// Dispatch one native binary subcommand.
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -39,6 +40,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
             notify("Copy failed", Some(message));
         }),
         Some("copy-archive") if args.len() == 1 => copy_archive(),
+        Some("paste-archive") if args.len() == 1 => deliver_archive(Delivery::Paste),
+        Some("send-archive") if args.len() == 1 => deliver_archive(Delivery::Send),
         Some("manage") if args.len() == 1 => manage().inspect_err(|message| {
             notify("Unable to open annotations", Some(message));
         }),
@@ -140,9 +143,9 @@ fn copy_context() -> Result<(), String> {
     Ok(())
 }
 
-/// The notification and exit status one copy-and-archive action reports.
+/// The notification and exit status one copy-, paste- or send-and-archive action reports.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct CopyArchiveReport {
+struct ArchiveReport {
     title: String,
     body: String,
     failure: bool,
@@ -152,9 +155,9 @@ struct CopyArchiveReport {
 ///
 /// `loaded_empty` separates the nothing-to-do case from a real failure: both are `StayOpen`,
 /// but an empty store is reported like `copy-context` and returns success.
-fn copy_archive_report(outcome: CopyAndArchiveOutcome, loaded_empty: bool) -> CopyArchiveReport {
+fn copy_archive_report(outcome: CopyAndArchiveOutcome, loaded_empty: bool) -> ArchiveReport {
     match outcome {
-        CopyAndArchiveOutcome::Close { archived_count } => CopyArchiveReport {
+        CopyAndArchiveOutcome::Close { archived_count } => ArchiveReport {
             title: "Annotations copied and archived".to_owned(),
             body: format!(
                 "{archived_count} annotation{} copied as Markdown and archived.",
@@ -162,17 +165,17 @@ fn copy_archive_report(outcome: CopyAndArchiveOutcome, loaded_empty: bool) -> Co
             ),
             failure: false,
         },
-        CopyAndArchiveOutcome::ArchivedActiveRetained { message } => CopyArchiveReport {
+        CopyAndArchiveOutcome::ArchivedActiveRetained { message } => ArchiveReport {
             title: "Copy and archive incomplete".to_owned(),
             body: format!("Copied and archived, but active annotations remain: {message}"),
             failure: true,
         },
-        CopyAndArchiveOutcome::StayOpen { .. } if loaded_empty => CopyArchiveReport {
+        CopyAndArchiveOutcome::StayOpen { .. } if loaded_empty => ArchiveReport {
             title: "No annotations".to_owned(),
             body: "There is nothing to copy yet.".to_owned(),
             failure: false,
         },
-        CopyAndArchiveOutcome::StayOpen { message } => CopyArchiveReport {
+        CopyAndArchiveOutcome::StayOpen { message } => ArchiveReport {
             title: "Copy and archive failed".to_owned(),
             body: message,
             failure: true,
@@ -196,7 +199,7 @@ fn copy_archive() -> Result<(), String> {
             }
             loaded
         },
-        write_clipboard: |text: String| write_clipboard(&text),
+        deliver: |text: String| write_clipboard(&text),
         save_archive: |archive: ArchivedAnnotationSet| append_archived_set(&dir, &archive),
         remove_active: |ids: Vec<String>| remove_annotations_by_id(&dir, &ids),
         create_archive_id: || Uuid::new_v4().to_string(),
@@ -204,6 +207,109 @@ fn copy_archive() -> Result<(), String> {
     });
 
     let report = copy_archive_report(outcome, loaded_empty.get());
+    notify(&report.title, Some(&report.body));
+    if report.failure {
+        return Err(report.body);
+    }
+    Ok(())
+}
+
+/// Map one paste- or send-and-archive outcome to the action's notification and exit status.
+///
+/// `loaded_empty` is read as in `copy_archive_report`. `delivered` separates a refused delivery,
+/// where nothing reached the agent, from an archive failure after the agent already has the text:
+/// both are `StayOpen`, but only the second must not suggest trying again.
+fn deliver_archive_report(
+    delivery: Delivery,
+    outcome: CopyAndArchiveOutcome,
+    loaded_empty: bool,
+    delivered: bool,
+) -> ArchiveReport {
+    let (action, landed) = match delivery {
+        Delivery::Paste => ("Paste", "pasted into the agent's prompt"),
+        Delivery::Send => ("Send", "sent to the agent"),
+    };
+    let past = delivery.past();
+    match outcome {
+        CopyAndArchiveOutcome::Close { archived_count } => ArchiveReport {
+            title: format!("Annotations {past} and archived"),
+            body: format!(
+                "{archived_count} annotation{} {landed} and archived.",
+                if archived_count == 1 { "" } else { "s" }
+            ),
+            failure: false,
+        },
+        CopyAndArchiveOutcome::ArchivedActiveRetained { message } => ArchiveReport {
+            title: format!("{action} and archive incomplete"),
+            body: format!(
+                "{} and archived, but active annotations remain: {message}",
+                capitalized(landed)
+            ),
+            failure: true,
+        },
+        CopyAndArchiveOutcome::StayOpen { .. } if loaded_empty => ArchiveReport {
+            title: "No annotations".to_owned(),
+            body: format!("There is nothing to {} yet.", delivery.verb()),
+            failure: false,
+        },
+        CopyAndArchiveOutcome::StayOpen { message } if delivered => ArchiveReport {
+            title: format!("Annotations {past}, not archived"),
+            body: format!(
+                "{}, but archiving failed, so your annotations are still active: {message}",
+                capitalized(landed)
+            ),
+            failure: true,
+        },
+        CopyAndArchiveOutcome::StayOpen { message } => ArchiveReport {
+            title: format!("{action} failed"),
+            body: message,
+            failure: true,
+        },
+    }
+}
+
+fn capitalized(text: &str) -> String {
+    let mut characters = text.chars();
+    characters
+        .next()
+        .map(|first| first.to_uppercase().chain(characters).collect())
+        .unwrap_or_default()
+}
+
+fn deliver_archive(delivery: Delivery) -> Result<(), String> {
+    let failed = match delivery {
+        Delivery::Paste => "Paste failed",
+        Delivery::Send => "Send failed",
+    };
+    let Some(dir) = state_dir() else {
+        let message = "HERDR_PLUGIN_STATE_DIR is not set".to_owned();
+        notify(failed, Some(&message));
+        return Err(message);
+    };
+    let pane = parse_invocation_context(&invocation_context()).focused_pane_id;
+
+    let loaded_empty = Cell::new(false);
+    let delivered = Cell::new(false);
+    let outcome = copy_and_archive_annotations(CopyAndArchiveDependencies {
+        load_active: || {
+            let loaded = load_annotations(&dir);
+            if matches!(&loaded, Ok(active) if active.is_empty()) {
+                loaded_empty.set(true);
+            }
+            loaded
+        },
+        deliver: |text: String| {
+            deliver_to_agent(delivery, pane.as_deref(), &text, run_herdr_output)?;
+            delivered.set(true);
+            Ok(())
+        },
+        save_archive: |archive: ArchivedAnnotationSet| append_archived_set(&dir, &archive),
+        remove_active: |ids: Vec<String>| remove_annotations_by_id(&dir, &ids),
+        create_archive_id: || Uuid::new_v4().to_string(),
+        now: now_iso,
+    });
+
+    let report = deliver_archive_report(delivery, outcome, loaded_empty.get(), delivered.get());
     notify(&report.title, Some(&report.body));
     if report.failure {
         return Err(report.body);
@@ -273,13 +379,20 @@ mod tests {
             run(&["copy-archive".to_owned(), "extra".to_owned()]),
             Err(USAGE.to_owned())
         );
+        for subcommand in ["paste-archive", "send-archive"] {
+            assert_eq!(
+                run(&[subcommand.to_owned(), "extra".to_owned()]),
+                Err(USAGE.to_owned())
+            );
+            assert!(USAGE.contains(subcommand), "{USAGE}");
+        }
     }
 
     #[test]
     fn copy_archive_maps_every_outcome_to_its_notification_and_exit_status() {
         assert_eq!(
             copy_archive_report(CopyAndArchiveOutcome::Close { archived_count: 1 }, false),
-            CopyArchiveReport {
+            ArchiveReport {
                 title: "Annotations copied and archived".to_owned(),
                 body: "1 annotation copied as Markdown and archived.".to_owned(),
                 failure: false,
@@ -287,7 +400,7 @@ mod tests {
         );
         assert_eq!(
             copy_archive_report(CopyAndArchiveOutcome::Close { archived_count: 3 }, false),
-            CopyArchiveReport {
+            ArchiveReport {
                 title: "Annotations copied and archived".to_owned(),
                 body: "3 annotations copied as Markdown and archived.".to_owned(),
                 failure: false,
@@ -300,7 +413,7 @@ mod tests {
                 },
                 true,
             ),
-            CopyArchiveReport {
+            ArchiveReport {
                 title: "No annotations".to_owned(),
                 body: "There is nothing to copy yet.".to_owned(),
                 failure: false,
@@ -313,7 +426,7 @@ mod tests {
                 },
                 false,
             ),
-            CopyArchiveReport {
+            ArchiveReport {
                 title: "Copy and archive failed".to_owned(),
                 body: "clipboard write failed".to_owned(),
                 failure: true,
@@ -326,9 +439,109 @@ mod tests {
                 },
                 false,
             ),
-            CopyArchiveReport {
+            ArchiveReport {
                 title: "Copy and archive incomplete".to_owned(),
                 body: "Copied and archived, but active annotations remain: store is busy"
+                    .to_owned(),
+                failure: true,
+            }
+        );
+    }
+
+    #[test]
+    fn paste_and_send_archive_map_every_outcome_to_their_own_wording() {
+        assert_eq!(
+            deliver_archive_report(
+                Delivery::Paste,
+                CopyAndArchiveOutcome::Close { archived_count: 1 },
+                false,
+                true
+            ),
+            ArchiveReport {
+                title: "Annotations pasted and archived".to_owned(),
+                body: "1 annotation pasted into the agent's prompt and archived.".to_owned(),
+                failure: false,
+            }
+        );
+        assert_eq!(
+            deliver_archive_report(
+                Delivery::Send,
+                CopyAndArchiveOutcome::Close { archived_count: 3 },
+                false,
+                true
+            ),
+            ArchiveReport {
+                title: "Annotations sent and archived".to_owned(),
+                body: "3 annotations sent to the agent and archived.".to_owned(),
+                failure: false,
+            }
+        );
+        for (delivery, body) in [
+            (Delivery::Paste, "There is nothing to paste yet."),
+            (Delivery::Send, "There is nothing to send yet."),
+        ] {
+            assert_eq!(
+                deliver_archive_report(
+                    delivery,
+                    CopyAndArchiveOutcome::StayOpen {
+                        message: "Nothing to copy and archive.".to_owned(),
+                    },
+                    true,
+                    false
+                ),
+                ArchiveReport {
+                    title: "No annotations".to_owned(),
+                    body: body.to_owned(),
+                    failure: false,
+                }
+            );
+        }
+        let refusal = "The agent is waiting on a prompt. Nothing was sent; your annotations are still active.";
+        assert_eq!(
+            deliver_archive_report(
+                Delivery::Send,
+                CopyAndArchiveOutcome::StayOpen {
+                    message: refusal.to_owned(),
+                },
+                false,
+                false
+            ),
+            ArchiveReport {
+                title: "Send failed".to_owned(),
+                body: refusal.to_owned(),
+                failure: true,
+            }
+        );
+        assert_eq!(
+            deliver_archive_report(
+                Delivery::Send,
+                CopyAndArchiveOutcome::StayOpen {
+                    message: "archive store is busy".to_owned(),
+                },
+                false,
+                true
+            ),
+            ArchiveReport {
+                title: "Annotations sent, not archived".to_owned(),
+                body: "Sent to the agent, but archiving failed, so your annotations are still \
+                       active: archive store is busy"
+                    .to_owned(),
+                failure: true,
+            }
+        );
+        assert_eq!(
+            deliver_archive_report(
+                Delivery::Paste,
+                CopyAndArchiveOutcome::ArchivedActiveRetained {
+                    message: "store is busy".to_owned(),
+                },
+                false,
+                true
+            ),
+            ArchiveReport {
+                title: "Paste and archive incomplete".to_owned(),
+                body: "Pasted into the agent's prompt and archived, but active annotations \
+                       remain: store is busy"
                     .to_owned(),
                 failure: true,
             }

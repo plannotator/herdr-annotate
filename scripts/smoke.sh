@@ -97,7 +97,7 @@ trap restore EXIT
 
 echo "== fresh install: full"
 install "$spec"
-check "actions" "$(actions)" "capture,copy-archive,copy-context,last,last-newest,manage,open,open-link,terminal"
+check "actions" "$(actions)" "capture,copy-archive,copy-context,last,last-newest,manage,open,open-link,paste-archive,send-archive,terminal"
 check "action programs" "$(programs)" "./bin/herdr-annotate.exe,./bin/plannotator-tui.exe"
 check "review binary matches pin" "$(tui_version)" "$(tui_pin)"
 check "native binary matches pin" "$(native_version)" "$(native_pin)"
@@ -126,7 +126,7 @@ check "native binary installed on upgrade" "$(native_version)" "$(native_pin)"
 
 echo "== fresh install: lite"
 install "$spec/lite"
-check "actions" "$(actions)" "capture,copy-archive,copy-context,manage"
+check "actions" "$(actions)" "capture,copy-archive,copy-context,manage,paste-archive,send-archive"
 check "action programs" "$(programs)" "../bin/herdr-annotate.exe"
 check "no review binary" "$(tui_version)" "none"
 check "native binary matches pin" "$(native_version)" "$(native_pin)"
@@ -134,7 +134,7 @@ check "manager pane" "$(manager_renders)" "ok"
 
 echo "== swap: lite -> full"
 install "$spec"
-check "actions" "$(actions)" "capture,copy-archive,copy-context,last,last-newest,manage,open,open-link,terminal"
+check "actions" "$(actions)" "capture,copy-archive,copy-context,last,last-newest,manage,open,open-link,paste-archive,send-archive,terminal"
 check "review binary" "$(tui_version)" "$(tui_pin)"
 check "native binary" "$(native_version)" "$(native_pin)"
 

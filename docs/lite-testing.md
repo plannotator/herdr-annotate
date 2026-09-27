@@ -6,10 +6,12 @@ by running both runtimes side by side.
 
 ## Recorded goldens
 
-`scripts/lite-regression.py` drives all six entrypoints the Lite manifest declares and compares
+`scripts/lite-regression.py` drives the six entrypoints the Bun runtime shipped and compares
 every observable with a recording checked in under `scripts/lite-goldens/`. The recording was taken
 from the Bun runtime at commit `2add0da`, the last commit that still contained `src/`, so a green
-run means the native runtime still does what Bun did.
+run means the native runtime still does what Bun did. `paste-archive` and `send-archive` came
+later and have no recording; the harness checks their manifest entries, and `cargo test` covers
+their behavior.
 
 ```sh
 bash scripts/lite-regression.sh

@@ -1,5 +1,6 @@
 //! Native implementation of Herdr Annotate Lite.
 
+pub mod agent_delivery;
 pub mod archive_workflow;
 pub mod clipboard;
 pub mod edit_keys;

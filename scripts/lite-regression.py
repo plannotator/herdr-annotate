@@ -48,8 +48,11 @@ ISO_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z")
 UUID_PATTERN = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
 )
-# The six entrypoints the Lite manifest declares, and the whole surface this harness drives.
+# The six entrypoints the Bun runtime shipped, and the whole surface this harness drives.
 ENTRYPOINTS = ("capture", "copy-archive", "copy-context", "editor", "manage", "manager")
+# Lite actions added after the Bun runtime retired. No recording exists to compare them with, so
+# this harness checks only their manifest entries; the Rust tests cover their behavior.
+NATIVE_ONLY_ENTRYPOINTS = ("paste-archive", "send-archive")
 # The Full manifest at the repository root starts the binary in its own bin/; the Lite variant
 # in lite/ shares that one staged binary, the way it shared the Bun sources.
 NATIVE_PROGRAM = "./bin/herdr-annotate.exe"
@@ -1813,7 +1816,7 @@ def verify_manifests(root: Path, goldens: Goldens) -> None:
 
     goldens.equal(
         "manifest.harness-entrypoints",
-        list(ENTRYPOINTS),
+        sorted(ENTRYPOINTS + NATIVE_ONLY_ENTRYPOINTS),
         sorted(set(lite_actions) | set(lite_panes)),
     )
     # Full adds the plannotator-tui review entrypoints; every Lite one must also be in Full.

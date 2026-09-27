@@ -29,6 +29,8 @@ requirements, not completed verification. Every box starts unchecked.
   | `capture` | Annotate selection | `pane` |
   | `copy-context` | Copy annotations as context | `global` |
   | `copy-archive` | Copy annotations as context and archive them | `global` |
+  | `paste-archive` | Paste annotations into the agent's prompt and archive them | `pane` |
+  | `send-archive` | Send annotations to the agent and archive them | `pane` |
   | `manage` | Manage annotations | `global` |
   | `open` | Annotate: open here | `workspace`, `pane` |
   | `open-link` | Annotate this file | `pane` |

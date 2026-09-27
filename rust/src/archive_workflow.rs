@@ -1,14 +1,17 @@
-//! Recoverable copy/archive and restore transitions.
+//! Recoverable deliver/archive and restore transitions.
 
 use crate::format::format_annotations;
 use crate::store::{StoreResult, newest_first_annotations};
 use crate::types::{Annotation, ArchivedAnnotationSet};
 
 /// Dependencies for one copy-and-archive transition.
+///
+/// `deliver` receives the formatted annotations: the clipboard for copy-and-archive, or the
+/// focused agent's prompt for the paste and send actions.
 #[derive(Debug)]
-pub struct CopyAndArchiveDependencies<Load, Write, Save, Remove, Id, Now> {
+pub struct CopyAndArchiveDependencies<Load, Deliver, Save, Remove, Id, Now> {
     pub load_active: Load,
-    pub write_clipboard: Write,
+    pub deliver: Deliver,
     pub save_archive: Save,
     pub remove_active: Remove,
     pub create_archive_id: Id,
@@ -23,13 +26,13 @@ pub enum CopyAndArchiveOutcome {
     ArchivedActiveRetained { message: String },
 }
 
-/// Copy the active annotations, persist a recoverable archive, then remove active IDs.
-pub fn copy_and_archive_annotations<Load, Write, Save, Remove, Id, Now>(
-    dependencies: CopyAndArchiveDependencies<Load, Write, Save, Remove, Id, Now>,
+/// Deliver the active annotations, persist a recoverable archive, then remove active IDs.
+pub fn copy_and_archive_annotations<Load, Deliver, Save, Remove, Id, Now>(
+    dependencies: CopyAndArchiveDependencies<Load, Deliver, Save, Remove, Id, Now>,
 ) -> CopyAndArchiveOutcome
 where
     Load: FnOnce() -> StoreResult<Vec<Annotation>>,
-    Write: FnOnce(String) -> Result<(), String>,
+    Deliver: FnOnce(String) -> Result<(), String>,
     Save: FnOnce(ArchivedAnnotationSet) -> StoreResult<()>,
     Remove: FnOnce(Vec<String>) -> StoreResult<()>,
     Id: FnOnce() -> String,
@@ -45,7 +48,7 @@ where
         };
     }
     if let Err(message) =
-        (dependencies.write_clipboard)(format_annotations(&newest_first_annotations(&active)))
+        (dependencies.deliver)(format_annotations(&newest_first_annotations(&active)))
     {
         return CopyAndArchiveOutcome::StayOpen { message };
     }
@@ -175,7 +178,7 @@ mod tests {
                 events.borrow_mut().push("load");
                 Ok(vec![annotation("one"), annotation("two")])
             },
-            write_clipboard: |text: String| {
+            deliver: |text: String| {
                 events.borrow_mut().push("copy");
                 text.clone_into(&mut clipboard.borrow_mut());
                 Ok(())
@@ -208,7 +211,7 @@ mod tests {
         let removed = Cell::new(false);
         let outcome = copy_and_archive_annotations(CopyAndArchiveDependencies {
             load_active: || Ok(vec![annotation("one")]),
-            write_clipboard: |_| Err("Clipboard unavailable".to_owned()),
+            deliver: |_| Err("Clipboard unavailable".to_owned()),
             save_archive: |_| {
                 archived.set(true);
                 Ok(())
@@ -234,7 +237,7 @@ mod tests {
         let removed = Cell::new(false);
         let outcome = copy_and_archive_annotations(CopyAndArchiveDependencies {
             load_active: || Ok(vec![annotation("one")]),
-            write_clipboard: |_| Ok(()),
+            deliver: |_| Ok(()),
             save_archive: |_| Err("Archive unavailable".to_owned()),
             remove_active: |_| {
                 removed.set(true);
@@ -256,7 +259,7 @@ mod tests {
     fn clear_failure_reports_retained_active_data() {
         let outcome = copy_and_archive_annotations(CopyAndArchiveDependencies {
             load_active: || Ok(vec![annotation("one")]),
-            write_clipboard: |_| Ok(()),
+            deliver: |_| Ok(()),
             save_archive: |_| Ok(()),
             remove_active: |_| Err("Active store unavailable".to_owned()),
             create_archive_id: || "archive-one".to_owned(),
@@ -336,7 +339,7 @@ mod tests {
         append_annotation(&dir, &annotation("snapshot")).expect("append");
         let outcome = copy_and_archive_annotations(CopyAndArchiveDependencies {
             load_active: || load_annotations(&dir),
-            write_clipboard: |_| Ok(()),
+            deliver: |_| Ok(()),
             save_archive: |set| {
                 append_archived_set(&dir, &set)?;
                 append_annotation(&dir, &annotation("concurrent"))

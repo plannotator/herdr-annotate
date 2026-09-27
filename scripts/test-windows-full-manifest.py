@@ -51,7 +51,14 @@ NATIVE_WINDOWS_BUILD = [
     "scripts/fetch-herdr-annotate.ps1",
 ]
 NATIVE_ENTRIES = {
-    "actions": ("capture", "copy-context", "copy-archive", "manage"),
+    "actions": (
+        "capture",
+        "copy-context",
+        "copy-archive",
+        "paste-archive",
+        "send-archive",
+        "manage",
+    ),
     "panes": ("editor", "manager"),
 }
 DISTRIBUTED_PANE = [

@@ -555,7 +555,7 @@ impl ManagerApp {
         let dir = self.dir.clone();
         let outcome = copy_and_archive_annotations(CopyAndArchiveDependencies {
             load_active: || load_annotations(&dir),
-            write_clipboard: |text: String| pane_clipboard_write(&text),
+            deliver: |text: String| pane_clipboard_write(&text),
             save_archive: |archive: ArchivedAnnotationSet| append_archived_set(&dir, &archive),
             remove_active: |ids: Vec<String>| remove_annotations_by_id(&dir, &ids),
             create_archive_id: || Uuid::new_v4().to_string(),
