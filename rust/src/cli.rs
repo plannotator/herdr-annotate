@@ -20,7 +20,7 @@ use crate::handoff::take_default_handoff;
 use crate::herdr::{notify, run_herdr, run_herdr_output};
 use crate::paths::{normalize_windows_path, plugin_root, state_dir};
 use crate::store::{
-    append_archived_set, load_annotations, newest_first_annotations, remove_annotations_by_id,
+    append_archived_set, capture_order_annotations, load_annotations, remove_annotations_by_id,
 };
 use crate::types::{
     ArchivedAnnotationSet, PendingAnnotation, javascript_trim, parse_invocation_context,
@@ -126,7 +126,7 @@ fn capture() -> Result<(), String> {
 
 fn copy_context() -> Result<(), String> {
     let dir = state_dir().ok_or_else(|| "HERDR_PLUGIN_STATE_DIR is not set".to_owned())?;
-    let annotations = newest_first_annotations(&load_annotations(&dir)?);
+    let annotations = capture_order_annotations(&load_annotations(&dir)?);
     if annotations.is_empty() {
         notify("No annotations", Some("There is nothing to copy yet."));
         return Ok(());

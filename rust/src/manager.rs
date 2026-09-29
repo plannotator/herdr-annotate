@@ -23,9 +23,8 @@ use crate::manager_copy::{ManagerCopyOutcome, copy_annotations};
 use crate::pane_clipboard::{emit_to_terminal, write_pane_clipboard};
 use crate::paths::state_dir;
 use crate::store::{
-    append_archived_set, load_annotations, load_archived_sets, merge_annotations,
-    newest_first_annotations, newest_first_archived_sets, remove_annotations_by_id,
-    remove_archived_set,
+    append_archived_set, capture_order_annotations, load_annotations, load_archived_sets,
+    merge_annotations, newest_first_archived_sets, remove_annotations_by_id, remove_archived_set,
 };
 use crate::termination::Termination;
 use crate::types::{Annotation, ArchivedAnnotationSet};
@@ -80,7 +79,7 @@ impl ManagerApp {
     fn reload_active(&mut self) -> bool {
         match load_annotations(&self.dir) {
             Ok(annotations) => {
-                self.annotations = newest_first_annotations(&annotations);
+                self.annotations = capture_order_annotations(&annotations);
                 self.active_selected =
                     clamp_selection(self.active_selected, self.annotations.len());
                 true
@@ -172,7 +171,7 @@ impl ManagerApp {
             frame,
             1,
             0,
-            &format!("Annotations ({})  newest first", self.annotations.len()),
+            &format!("Annotations ({})  oldest first", self.annotations.len()),
             list_width.saturating_sub(1),
             Style::default().add_modifier(Modifier::BOLD),
         );
@@ -379,7 +378,7 @@ impl ManagerApp {
             detail_width,
             Style::default().add_modifier(Modifier::BOLD),
         );
-        let visible = newest_first_annotations(&current.annotations);
+        let visible = capture_order_annotations(&current.annotations);
         let preview_rows = rows.saturating_sub(8).max(1);
         for (index, annotation) in visible.iter().take(preview_rows).enumerate() {
             render_line(
@@ -532,7 +531,7 @@ impl ManagerApp {
                 let items = self
                     .archives
                     .get(self.archive_selected)
-                    .map(|archive| newest_first_annotations(&archive.annotations))
+                    .map(|archive| capture_order_annotations(&archive.annotations))
                     .unwrap_or_default();
                 self.copy(&items);
             }
@@ -806,7 +805,7 @@ mod tests {
     }
 
     #[test]
-    fn active_frame_is_newest_first_and_has_detail_and_keys() {
+    fn active_frame_is_oldest_first_and_has_detail_and_keys() {
         let dir = directory();
         append_annotation(&dir, &annotation("one")).expect("one");
         append_annotation(&dir, &annotation("two")).expect("two");
@@ -825,8 +824,9 @@ mod tests {
             .iter()
             .position(|row| row.contains("selection two"))
             .expect("two");
-        assert!(two < one);
-        assert!(frame.iter().any(|row| row.contains("comment two")));
+        assert!(one < two);
+        assert!(frame.iter().any(|row| row.contains("oldest first")));
+        assert!(frame.iter().any(|row| row.contains("comment one")));
         assert!(frame.iter().any(|row| row.contains("Shift+C copy+archive")));
         let _ = fs::remove_dir_all(dir);
     }

@@ -555,6 +555,6 @@ mod tests {
             *events.borrow(),
             ["load", "agent get", "agent prompt", "archive", "remove"]
         );
-        assert!(prompted.borrow().find("selection two") < prompted.borrow().find("selection one"));
+        assert!(prompted.borrow().find("selection one") < prompted.borrow().find("selection two"));
     }
 }

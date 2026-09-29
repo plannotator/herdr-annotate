@@ -60,6 +60,13 @@ Wayland, then xclip, then xsel.
 only for a deliberate behavior change, and read the diff: every rewritten line is a behavior the
 retired runtime no longer defines.
 
+Deliberate re-records so far:
+
+- 0.8.0 (#66): annotations are listed and handed off oldest first instead of newest first, the
+  manager header reads `oldest first`, and the copied Markdown follows Plannotator's feedback
+  format (`# Annotations on terminal selections`, `## Annotation N (workspace / tab)`,
+  `Comment on:`, `>` comment). The store bytes and `bun-editor-annotations.jsonl` are unchanged.
+
 ## Everything else
 
 | Check | Command |

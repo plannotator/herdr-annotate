@@ -240,11 +240,11 @@ fn send_archive_prompts_the_focused_agent_then_archives() {
     assert!(output.status.success(), "{output:?}");
     assert!(
         calls.starts_with(
-            "agent\nget\nw1:p2\n--\nagent\nprompt\nw1:p2\n# Annotated context\n\n## Annotation 1\n"
+            "agent\nget\nw1:p2\n--\nagent\nprompt\nw1:p2\n# Annotations on terminal selections\n\n## Annotation 1"
         ),
         "{calls}"
     );
-    assert!(calls.find("second selection") < calls.find("first selection"));
+    assert!(calls.find("first selection") < calls.find("second selection"));
     assert!(!calls.contains('\x1b'), "{calls}");
     assert!(calls.ends_with(
         "--\nnotification\nshow\nAnnotations sent and archived\n--body\n\
@@ -266,12 +266,12 @@ fn paste_archive_checks_the_agent_then_types_one_bracketed_paste() {
     assert!(output.status.success(), "{output:?}");
     assert!(
         calls.starts_with(
-            "agent\nget\nw1:p2\n--\npane\nsend-text\nw1:p2\n\x1b[200~# Annotated context\n"
+            "agent\nget\nw1:p2\n--\npane\nsend-text\nw1:p2\n\x1b[200~# Annotations on terminal selections\n"
         ),
         "{calls}"
     );
     assert!(calls.contains(
-        "first comment\n\x1b[201~\n--\nnotification\nshow\nAnnotations pasted and archived\n"
+        "second comment\n\x1b[201~\n--\nnotification\nshow\nAnnotations pasted and archived\n"
     ));
     assert_eq!(calls.matches('\x1b').count(), 2);
     assert_eq!(active(&state), "");

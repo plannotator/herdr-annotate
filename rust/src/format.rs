@@ -63,7 +63,13 @@ fn fence_for(text: &str) -> String {
     "`".repeat((longest + 1).max(3))
 }
 
-/// Format saved annotations as portable, agent-neutral Markdown context.
+/// Format saved annotations as the Markdown feedback Plannotator hands a coding agent.
+///
+/// The shape follows plannotator-tui's export: `# Annotations on …`, then one numbered
+/// `## Annotation N` per note in the order given, the quoted selection, and the comment as a
+/// blockquote. Where Plannotator puts the line number in the heading, a terminal selection puts
+/// the Herdr workspace and tab it came from. A one-line selection is quoted inline; a selection
+/// spanning lines is fenced so its layout survives and quoted Markdown cannot escape.
 pub fn format_annotations(annotations: &[Annotation]) -> String {
     let sections = annotations
         .iter()
@@ -77,41 +83,37 @@ pub fn format_annotations(annotations: &[Annotation]) -> String {
             .flatten()
             .collect::<Vec<_>>()
             .join(" / ");
-            let fence = fence_for(&annotation.selected_text);
-            let metadata = if source.is_empty() {
+            let location = if source.is_empty() {
                 String::new()
             } else {
-                format!("\nSource: {source}\n")
+                format!(" ({source})")
             };
-            let lines = vec![
-                format!("## Annotation {}", index + 1),
-                metadata,
-                "Selected text:".to_owned(),
-                String::new(),
-                fence.clone(),
-                annotation.selected_text.clone(),
-                fence,
-                String::new(),
-                "Comment:".to_owned(),
-                String::new(),
-                annotation.comment.clone(),
-            ];
-            let mut filtered = Vec::new();
-            for line in lines {
-                if line.is_empty() && filtered.last().is_some_and(String::is_empty) {
-                    continue;
-                }
-                filtered.push(line);
-            }
-            filtered.join("\n")
+            let selection = annotation.selected_text.trim_matches(['\r', '\n']);
+            let quoted = if selection.contains('\n') {
+                let fence = fence_for(selection);
+                format!("Comment on:\n{fence}\n{selection}\n{fence}")
+            } else {
+                format!("Comment on: \"{}\"", selection.trim())
+            };
+            let comment = annotation
+                .comment
+                .trim()
+                .replace("\r\n", "\n")
+                .replace('\n', "\n> ");
+            format!(
+                "## Annotation {}{location}\n{quoted}\n> {comment}",
+                index + 1
+            )
         })
         .collect::<Vec<_>>()
         .join("\n\n");
-    format!("# Annotated context\n\n{sections}\n")
+    format!("# Annotations on terminal selections\n\n{sections}\n")
 }
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::expect_used, reason = "tests assert by panicking")]
+
     use crate::types::{Annotation, InvocationContext};
 
     use super::*;
@@ -148,17 +150,36 @@ mod tests {
     }
 
     #[test]
-    fn markdown_contains_source_selection_and_comment() {
-        let output = format_annotations(&[annotation("failed to connect")]);
-        assert!(output.contains("# Annotated context"));
-        assert!(output.contains("Source: api / server"));
-        assert!(output.contains("failed to connect"));
-        assert!(output.contains("Check the database first."));
+    fn markdown_matches_the_plannotator_feedback_shape() {
+        let mut second = annotation("line one\nline two\n");
+        second.comment = "Why twice?\nPick one.".to_owned();
+        second.context = InvocationContext::default();
+        let output = format_annotations(&[annotation("failed to connect"), second]);
+        assert_eq!(
+            output,
+            "# Annotations on terminal selections\n\n\
+             ## Annotation 1 (api / server)\n\
+             Comment on: \"failed to connect\"\n\
+             > Check the database first.\n\n\
+             ## Annotation 2\n\
+             Comment on:\n```\nline one\nline two\n```\n\
+             > Why twice?\n> Pick one.\n"
+        );
+    }
+
+    #[test]
+    fn markdown_keeps_the_given_order() {
+        let mut second = annotation("second");
+        second.comment = "comment two".to_owned();
+        let output = format_annotations(&[annotation("first"), second]);
+        let first = output.find("\"first\"").expect("first");
+        let second = output.find("\"second\"").expect("second");
+        assert!(first < second);
     }
 
     #[test]
     fn markdown_uses_a_longer_fence_for_backticks() {
-        let output = format_annotations(&[annotation("```example```")]);
-        assert!(output.contains("````\n```example```\n````"));
+        let output = format_annotations(&[annotation("```example```\nmore")]);
+        assert!(output.contains("````\n```example```\nmore\n````"));
     }
 }

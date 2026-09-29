@@ -1,22 +1,15 @@
 {
   "process.copy.single.artifact": [
-    "# Annotated context",
+    "# Annotations on terminal selections",
     "",
-    "## Annotation 1",
-    "",
-    "Source: api 한 / server",
-    "",
-    "Selected text:",
-    "",
+    "## Annotation 1 (api 한 / server)",
+    "Comment on:",
     "````",
     "first selection with ``` ticks",
     "and a second line",
     "````",
-    "",
-    "Comment:",
-    "",
-    "first comment",
-    "with two lines",
+    "> first comment",
+    "> with two lines",
     ""
   ],
   "process.copy.single.exit": [

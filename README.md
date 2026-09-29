@@ -188,6 +188,11 @@ herdr server reload-config
 | `Ctrl+B Ctrl+S` | send all annotations as the focused agent's next message, then archive them |
 | `Ctrl+B M` | manage · `y` copy one · `c` copy all · `Shift+C` copy and archive · `Tab` archives (`y` copy · `u` restore · `d d` delete) |
 
+Annotations are listed and handed off oldest first, in the order you wrote them, so the agent
+reads your feedback in the same order you went through the text. The Markdown uses Plannotator's
+feedback format: one numbered `## Annotation N` per note, headed with the workspace and tab it came
+from, then `Comment on:` with the selected text and your comment as a `>` quote.
+
 Copies made inside the manager pane also emit OSC 52, so on Herdr 0.9.0 they reach the clipboard of
 the machine you are viewing from even when the plugin runs on a remote server with no clipboard tool
 installed; `Ctrl+B Shift+A` and `Ctrl+B Ctrl+A` do not, because those actions run outside a pane and

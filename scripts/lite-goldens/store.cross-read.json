@@ -3,23 +3,16 @@
     "0"
   ],
   "store.cross-read.markdown": [
-    "# Annotated context",
+    "# Annotations on terminal selections",
     "",
-    "## Annotation 1",
-    "",
-    "Source: api 한 / server",
-    "",
-    "Selected text:",
-    "",
+    "## Annotation 1 (api 한 / server)",
+    "Comment on:",
     "```",
     "selected wide 한글 text",
     "with a second line",
     "```",
-    "",
-    "Comment:",
-    "",
-    "alpha 한글 é",
-    "bt",
+    "> alpha 한글 é",
+    "> bt",
     ""
   ],
   "store.cross-read.processes": [
