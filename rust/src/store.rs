@@ -6,6 +6,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use chrono::DateTime;
 use serde::Serialize;
 use serde_json::Value;
 use uuid::Uuid;
@@ -61,9 +62,17 @@ impl Drop for StoreLockLease {
     }
 }
 
-/// Present append-ordered annotations with the most recently saved first.
-pub fn newest_first_annotations(annotations: &[Annotation]) -> Vec<Annotation> {
-    annotations.iter().rev().cloned().collect()
+/// Present annotations in the order they were written, oldest first.
+///
+/// Plannotator hands feedback to the agent in document order. Terminal selections from different
+/// panes share no document, so the order the user worked in stands in for it: saved time, oldest
+/// first. The sort is stable, so equal times keep store order, and a restored archive, which is
+/// appended to the store, still takes its place among the older annotations. A record whose time
+/// does not parse sorts before the rest, in store order.
+pub fn capture_order_annotations(annotations: &[Annotation]) -> Vec<Annotation> {
+    let mut ordered = annotations.to_vec();
+    ordered.sort_by_key(|annotation| DateTime::parse_from_rfc3339(&annotation.created_at).ok());
+    ordered
 }
 
 /// Load the complete active store, rejecting malformed records instead of dropping data.
@@ -459,15 +468,15 @@ mod tests {
     }
 
     #[test]
-    fn newest_first_does_not_mutate_storage_order() {
+    fn capture_order_keeps_store_order_for_equal_times_without_mutating_it() {
         let stored = vec![annotation("one"), annotation("two"), annotation("three")];
-        let newest = newest_first_annotations(&stored);
+        let ordered = capture_order_annotations(&stored);
         assert_eq!(
-            newest
+            ordered
                 .iter()
                 .map(|item| item.id.as_str())
                 .collect::<Vec<_>>(),
-            ["three", "two", "one"]
+            ["one", "two", "three"]
         );
         assert_eq!(
             stored
@@ -475,6 +484,22 @@ mod tests {
                 .map(|item| item.id.as_str())
                 .collect::<Vec<_>>(),
             ["one", "two", "three"]
+        );
+    }
+
+    #[test]
+    fn capture_order_puts_restored_older_annotations_first() {
+        let mut newer = annotation("newer");
+        newer.created_at = "2026-08-09T10:11:13.000Z".to_owned();
+        let mut restored = annotation("restored");
+        restored.created_at = "2026-08-08T00:00:01.000Z".to_owned();
+        let ordered = capture_order_annotations(&[newer, restored]);
+        assert_eq!(
+            ordered
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            ["restored", "newer"]
         );
     }
 

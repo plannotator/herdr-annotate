@@ -15,7 +15,7 @@
     "9"
   ],
   "screen.manager.empty-actions.screen.active-c": [
-    " Annotations (0)  newest first                                                                    ",
+    " Annotations (0)  oldest first                                                                    ",
     "                                   │                                                              ",
     " No active annotations.            │                                                              ",
     "                                   │                                                              ",
@@ -45,7 +45,7 @@
     " Nothing to copy.                                                                                 "
   ],
   "screen.manager.empty-actions.screen.active-copy-archive": [
-    " Annotations (0)  newest first                                                                    ",
+    " Annotations (0)  oldest first                                                                    ",
     "                                   │                                                              ",
     " No active annotations.            │                                                              ",
     "                                   │                                                              ",
@@ -75,7 +75,7 @@
     " Nothing to copy and archive.                                                                     "
   ],
   "screen.manager.empty-actions.screen.active-y": [
-    " Annotations (0)  newest first                                                                    ",
+    " Annotations (0)  oldest first                                                                    ",
     "                                   │                                                              ",
     " No active annotations.            │                                                              ",
     "                                   │                                                              ",
@@ -195,7 +195,7 @@
     " Nothing to copy.                                                                                 "
   ],
   "screen.manager.empty-actions.screen.initial": [
-    " Annotations (0)  newest first                                                                    ",
+    " Annotations (0)  oldest first                                                                    ",
     "                                   │                                                              ",
     " No active annotations.            │                                                              ",
     "                                   │                                                              ",

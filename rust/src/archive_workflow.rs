@@ -1,7 +1,7 @@
 //! Recoverable deliver/archive and restore transitions.
 
 use crate::format::format_annotations;
-use crate::store::{StoreResult, newest_first_annotations};
+use crate::store::{StoreResult, capture_order_annotations};
 use crate::types::{Annotation, ArchivedAnnotationSet};
 
 /// Dependencies for one copy-and-archive transition.
@@ -48,7 +48,7 @@ where
         };
     }
     if let Err(message) =
-        (dependencies.deliver)(format_annotations(&newest_first_annotations(&active)))
+        (dependencies.deliver)(format_annotations(&capture_order_annotations(&active)))
     {
         return CopyAndArchiveOutcome::StayOpen { message };
     }
@@ -199,7 +199,7 @@ mod tests {
         assert_eq!(outcome, CopyAndArchiveOutcome::Close { archived_count: 2 });
         assert_eq!(*events.borrow(), ["load", "copy", "archive", "remove"]);
         assert!(
-            clipboard.borrow().find("selection two") < clipboard.borrow().find("selection one")
+            clipboard.borrow().find("selection one") < clipboard.borrow().find("selection two")
         );
         assert_eq!(saved.borrow().as_ref(), Some(&archive(&["one", "two"])));
         assert_eq!(*removed.borrow(), ["one", "two"]);
