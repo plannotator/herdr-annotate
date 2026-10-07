@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn every_platform_has_read_and_write_candidates() {
-        assert!(!read_commands().is_empty());
-        assert!(!write_commands().is_empty());
+        assert_ne!(read_commands().len(), 0);
+        assert_ne!(write_commands().len(), 0);
     }
 }
