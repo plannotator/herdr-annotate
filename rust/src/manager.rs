@@ -892,7 +892,7 @@ mod tests {
         app.handle_key(KeyEvent::from(KeyCode::Char('D')));
         assert_eq!(load_annotations(&dir).expect("still active").len(), 1);
         app.handle_key(KeyEvent::from(KeyCode::Char('D')));
-        assert!(load_annotations(&dir).expect("cleared").is_empty());
+        assert_eq!(load_annotations(&dir).expect("cleared").len(), 0);
         let _ = fs::remove_dir_all(dir);
     }
 }

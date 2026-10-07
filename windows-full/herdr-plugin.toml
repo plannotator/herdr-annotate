@@ -21,7 +21,7 @@
 
 id = "annotate"
 name = "Annotate"
-version = "0.8.0"
+version = "0.9.0"
 min_herdr_version = "0.9.0"
 description = "Comment on terminal selections and copy annotations as agent context."
 platforms = ["windows"]
@@ -102,21 +102,15 @@ title = "Annotate"
 placement = "overlay"
 command = ["./bin/plannotator-tui.exe", "herdr", "pane"]
 
-# Both actions run the TUI directly, which reads Herdr's invocation context: the focused
-# pane's folder (open) or the clicked file:// link (open-link), and the focused pane's agent
-# as the target the review is sent back to.
+# The review actions run the TUI directly, which reads Herdr's invocation context (the focused
+# pane's folder and agent) and sends the review back to that agent. Ctrl-click on a
+# file:// Markdown link is not captured here; the opt-in links/ add-on declares that handler
+# and runs this variant's plannotator-tui, so a plain install keeps Herdr's default behavior.
 [[actions]]
 id = "open"
 title = "Annotate: open here"
 description = "Review the focused pane's folder in plannotator-tui and send feedback to its agent."
 contexts = ["workspace", "pane"]
-command = ["./bin/plannotator-tui.exe", "herdr", "open"]
-
-[[actions]]
-id = "open-link"
-title = "Annotate this file"
-description = "Open a Ctrl-clicked Markdown file in plannotator-tui."
-contexts = ["pane"]
 command = ["./bin/plannotator-tui.exe", "herdr", "open"]
 
 [[actions]]
@@ -140,10 +134,3 @@ title = "Annotate: terminal output"
 description = "Review the focused pane's recent terminal output in plannotator-tui and send feedback back."
 contexts = ["pane"]
 command = ["./bin/plannotator-tui.exe", "herdr", "terminal"]
-
-# Ctrl-click on a file:// Markdown link. Anchored on the scheme so web links never match.
-[[link_handlers]]
-id = "markdown-file"
-title = "Annotate this file"
-pattern = "^file://.*\\.(md|markdown|mdx)$"
-action = "open-link"

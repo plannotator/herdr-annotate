@@ -212,7 +212,7 @@ Full install. Works with Claude Code, Codex, pi, Copilot CLI, Droid, Oh My Pi, H
 | `Ctrl+B O` | this folder, with a file tree |
 | `Ctrl+B Shift+O` | the agent's recent replies |
 | `Ctrl+B Ctrl+O` | the agent's newest reply, with no picker |
-| Ctrl-click a `file://…md` link | that file |
+| Ctrl-click a `file://…md` link | that file, only with the opt-in Links add-on below |
 
 `annotate.terminal` opens the focused pane's recent terminal output (the last 200 lines) for
 review in the same way. It has no default key; to use it, bind one yourself, for example:
@@ -224,6 +224,31 @@ type = "plugin_action"
 command = "annotate.terminal"
 description = "review this pane's recent output"
 ```
+
+#### Ctrl-click Markdown links (opt-in)
+
+Annotate does not capture Ctrl-click on links by default, so `file://…md` links open the way
+Herdr normally opens them. To send Ctrl-clicked `file://` Markdown links (`.md`, `.markdown`,
+`.mdx`) to Annotate instead, install the Links add-on next to the Full install (on Windows, next
+to Windows Full):
+
+```sh
+herdr plugin install plannotator/herdr-annotate/links
+```
+
+To turn it off again:
+
+```sh
+herdr plugin uninstall annotate-links
+```
+
+The add-on has no binary of its own; it opens the file with the Full (or Windows Full) plugin's
+plannotator-tui. If neither is installed, Ctrl-click shows a notification saying which one to install.
+
+> **Upgrading from 0.8.0 or earlier:** up to plugin 0.8.0, the Full install captured these clicks
+> itself. From 0.9.0 it does not
+> ([#69](https://github.com/plannotator/herdr-annotate/issues/69)). Install the Links add-on to keep
+> the old behavior.
 
 **Send** (or `E`) makes the review the agent's next message. `q` closes. On an agent reply, `S`
 sends and closes in one key; `E` and `q` are unchanged.
@@ -288,6 +313,7 @@ herdr plugin link "$PWD"       # or "$PWD/lite" for the Lite variant
 
 `herdr plugin link` does not run manifest build hooks, so stage the binary first. It also replaces
 any existing `annotate` link; link the other directory to switch back.
+The Links add-on has no build step: `herdr plugin link "$PWD/links"` links it as `annotate-links`.
 
 `bash scripts/lite-regression.sh` checks the runtime against goldens recorded from the retired Bun
 runtime. [docs/lite-testing.md](docs/lite-testing.md) covers what it compares and everything else

@@ -3,7 +3,8 @@
 #
 # What this proves that no manifest or link test can: plannotator-tui starts as the pane
 # process, renders a document from a review folder outside the checkout, quits on `q` with
-# status zero, and leaves nothing running. The fixture marker is generated per run, so a
+# status zero, and leaves nothing running. It then runs the opt-in links/ add-on's Windows
+# action the way a Ctrl-click does, and checks that it opens the clicked file in Annotate. The fixture marker is generated per run, so a
 # stale buffer cannot satisfy the render assertion.
 #
 # The binary under test is fetched by the variant's own build command from the real release,
@@ -52,7 +53,16 @@ $isolatedNames = @(
   "HERDR_CLIENT_SOCKET_PATH",
   "PLANNOTATOR_TUI_BIN",
   "PLANNOTATOR_TUI_RELEASE_BASE",
-  "HERDR_ANNOTATE_BIN"
+  "HERDR_ANNOTATE_BIN",
+  "HERDR_BIN_PATH",
+  "HERDR_ENV",
+  "HERDR_PANE_ID",
+  "HERDR_PLUGIN_ID",
+  "HERDR_PLUGIN_ROOT",
+  "HERDR_PLUGIN_CONTEXT_JSON",
+  "HERDR_PLUGIN_ACTION_ID",
+  "HERDR_PLUGIN_LINK_HANDLER_ID",
+  "HERDR_PLUGIN_CLICKED_URL"
 )
 $oldEnvironment = @{}
 foreach ($name in $isolatedNames) {
@@ -110,6 +120,7 @@ try {
   [System.IO.Directory]::CreateDirectory($review) | Out-Null
   [System.IO.Directory]::CreateDirectory((Join-Path $variantRoot "scripts")) | Out-Null
   [System.IO.Directory]::CreateDirectory((Join-Path $checkout "scripts")) | Out-Null
+  [System.IO.Directory]::CreateDirectory((Join-Path $checkout "links")) | Out-Null
   Set-Content -LiteralPath (Join-Path $review $fixture) -Encoding utf8 -Value @(
     "# $marker",
     "",
@@ -125,7 +136,9 @@ try {
     @("scripts\fetch-plannotator-tui.ps1", (Join-Path $checkout "scripts\fetch-plannotator-tui.ps1")),
     @("scripts\fetch-herdr-annotate.ps1", (Join-Path $checkout "scripts\fetch-herdr-annotate.ps1")),
     @("windows-full\herdr-plugin.toml", (Join-Path $variantRoot "herdr-plugin.toml")),
-    @("windows-full\scripts\fetch-plannotator-tui.ps1", (Join-Path $variantRoot "scripts\fetch-plannotator-tui.ps1"))
+    @("windows-full\scripts\fetch-plannotator-tui.ps1", (Join-Path $variantRoot "scripts\fetch-plannotator-tui.ps1")),
+    @("links\herdr-plugin.toml", (Join-Path $checkout "links\herdr-plugin.toml")),
+    @("links\open-link.ps1", (Join-Path $checkout "links\open-link.ps1"))
   )) {
     [System.IO.File]::Copy((Join-Path $repositoryRoot $pair[0]), $pair[1], $true)
   }
@@ -288,6 +301,91 @@ try {
   Assert-True ($exits.Count -eq 1) "the isolated server logged no pane exit"
   Assert-True ($exits[0] -match "code: 0\b") "the review pane exited abnormally: $($exits[0])"
   Write-Output "[$Label] q closed the review pane with status zero and left no process behind"
+
+  # The opt-in links/ add-on (#69). Herdr must accept it on Windows and route a Markdown
+  # file:// link to its Windows action; the action is then run exactly as Herdr runs it --
+  # powershell.exe from PATH, from the add-on root, with the link-click environment -- and has
+  # to open the clicked file in Annotate's own doc pane.
+  $linksRoot = Join-Path $checkout "links"
+  $linkedLinks = Invoke-Herdr -Arguments @("plugin", "link", $linksRoot, "--enabled") | ConvertFrom-Json
+  Assert-True ($linkedLinks.result.type -ceq "plugin_linked") "the isolated Herdr did not link the links add-on"
+  $addOn = $linkedLinks.result.plugin
+  Assert-True ($addOn.plugin_id -ceq "annotate-links") "the links add-on id is $($addOn.plugin_id)"
+  $windowsHandler = @($addOn.link_handlers | Where-Object { $_.id -ceq "markdown-file-windows" })
+  Assert-True ($windowsHandler.Count -eq 1) "the links add-on lists no markdown-file-windows handler"
+  Assert-True ($windowsHandler[0].action -ceq "open-link-windows") "markdown-file-windows points elsewhere"
+  $windowsAction = @($addOn.actions | Where-Object { $_.id -ceq "open-link-windows" })
+  Assert-True ($windowsAction.Count -eq 1) "the links add-on lists no open-link-windows action"
+  $annotateListing = Invoke-Herdr -Arguments @("plugin", "list", "--plugin", "annotate", "--json") | ConvertFrom-Json
+  $annotatePlugin = @($annotateListing.result.plugins)[0]
+  $annotateHandlers = $annotatePlugin.PSObject.Properties['link_handlers']
+  Assert-True ($null -eq $annotateHandlers -or @($annotateHandlers.Value).Count -eq 0) `
+    "Windows Full still declares a link handler"
+
+  $clicked = ([System.Uri]::new((Join-Path $review $fixture))).AbsoluteUri
+  Assert-True ($clicked -match '^file://.*\.(md|markdown|mdx)$') "the click fixture $clicked does not match the handler"
+  $panesBefore = @((Invoke-Herdr -Arguments @("pane", "list") | ConvertFrom-Json).result.panes | ForEach-Object { $_.pane_id })
+  $env:HERDR_BIN_PATH = $script:resolvedHerdr
+  $env:HERDR_ENV = "1"
+  $env:HERDR_PANE_ID = $originPane
+  $env:HERDR_PLUGIN_ID = "annotate-links"
+  $env:HERDR_PLUGIN_ROOT = $linksRoot
+  $env:HERDR_PLUGIN_ACTION_ID = "open-link-windows"
+  $env:HERDR_PLUGIN_LINK_HANDLER_ID = "markdown-file-windows"
+  $env:HERDR_PLUGIN_CLICKED_URL = $clicked
+  $env:HERDR_PLUGIN_CONTEXT_JSON = (@{
+    workspace_cwd      = $review
+    focused_pane_id    = $originPane
+    focused_pane_cwd   = $review
+    invocation_source  = "link_click"
+    clicked_url        = $clicked
+    link_handler_id    = "markdown-file-windows"
+  } | ConvertTo-Json -Compress)
+  Push-Location -LiteralPath $linksRoot
+  try {
+    $actionOutput = (& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+      -File "open-link.ps1" *>&1 | Out-String).Trim()
+    $actionExit = $LASTEXITCODE
+  } finally {
+    Pop-Location
+  }
+  Assert-True ($actionExit -eq 0) "the links action exited $actionExit`n$actionOutput"
+
+  $deadline = (Get-Date).AddSeconds(20)
+  do {
+    Start-Sleep -Milliseconds 500
+    $newPanes = @((Invoke-Herdr -Arguments @("pane", "list") | ConvertFrom-Json).result.panes |
+      Where-Object { $panesBefore -notcontains $_.pane_id })
+  } while ($newPanes.Count -eq 0 -and (Get-Date) -lt $deadline)
+  Assert-True ($newPanes.Count -eq 1) "the links action opened $($newPanes.Count) panes`n$actionOutput"
+  $clickPane = $newPanes[0].pane_id
+  $waited = Invoke-Herdr -Arguments @(
+    "pane", "wait-output", $clickPane, "--match", $marker, "--timeout", "30000"
+  )
+  Assert-True ($LASTEXITCODE -eq 0) "the clicked file never rendered $marker`: $waited"
+  Write-Output "[$Label] links add-on opened the clicked file in Annotate ($clicked)"
+
+  Invoke-Herdr -Arguments @("pane", "send-keys", $clickPane, "q") | Out-Null
+  $deadline = (Get-Date).AddSeconds(20)
+  do {
+    Start-Sleep -Milliseconds 500
+    $panes = Invoke-Herdr -Arguments @("pane", "list")
+  } while ($panes -match [regex]::Escape($clickPane) -and (Get-Date) -lt $deadline)
+  Assert-True ($panes -notmatch [regex]::Escape($clickPane)) "the clicked-file pane stayed open after q"
+
+  # With Annotate disabled the action must refuse and say how to fix it, not fail silently.
+  Invoke-Herdr -Arguments @("plugin", "disable", "annotate") | Out-Null
+  Push-Location -LiteralPath $linksRoot
+  try {
+    $refusal = (& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+      -File "open-link.ps1" *>&1 | Out-String).Trim()
+    $refusalExit = $LASTEXITCODE
+  } finally {
+    Pop-Location
+  }
+  Assert-True ($refusalExit -eq 1) "the links action exited $refusalExit with Annotate disabled"
+  Assert-True ($refusal -match "herdr plugin enable annotate") "the disabled-plugin hint is missing: $refusal"
+  Write-Output "[$Label] links add-on refused with Annotate disabled: $refusal"
 } finally {
   if ($null -ne $script:resolvedHerdr) {
     & $script:resolvedHerdr server stop *>&1 | Out-Null

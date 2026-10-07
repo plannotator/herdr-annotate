@@ -556,7 +556,7 @@ mod tests {
         fs::create_dir_all(&parent).expect("temporary parent");
         fs::create_dir(&reference).expect("reference directory");
 
-        assert!(load_annotations(&dir).expect("load").is_empty());
+        assert_eq!(load_annotations(&dir).expect("load").len(), 0);
         assert_eq!(
             fs::metadata(&dir)
                 .expect("state metadata")

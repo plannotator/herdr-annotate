@@ -27,12 +27,15 @@ file is and ask them to review it.
 
    Address every item, then continue.
 
-When you list files you want the human to open, print them as `file://` hyperlinks (OSC 8)
-so Ctrl-click in Herdr opens them in plannotator-tui:
+When you list files you want the human to open, you may print them as `file://` hyperlinks
+(OSC 8):
 
 ```bash
 printf '\e]8;;file://%s\e\\%s\e]8;;\e\\\n' "$PWD/docs/plans/auth.md" "docs/plans/auth.md"
 ```
+
+Do not promise that Ctrl-click opens them in plannotator-tui. That happens only when the human
+installed the opt-in `annotate-links` add-on. To ask for a review, use step 2.
 
 If `plannotator-tui` is not on `PATH`, the raw Herdr command is:
 

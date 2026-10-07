@@ -67,10 +67,10 @@ try {
   Assert-True ($plugins.Count -eq 1) "pinned Herdr did not list exactly one Annotate plugin"
   $plugin = $plugins[0]
   $actionIds = @($plugin.actions | ForEach-Object { $_.id })
-  foreach ($id in @("capture", "copy-context", "manage", "open", "open-link", "last")) {
+  foreach ($id in @("capture", "copy-context", "manage", "open", "last")) {
     Assert-True ($actionIds -contains $id) "pinned Herdr omitted action $id"
   }
-  foreach ($id in @("open", "open-link", "last")) {
+  foreach ($id in @("open", "last")) {
     $action = @($plugin.actions | Where-Object { $_.id -ceq $id })
     $platforms = @($action[0].platforms)
     Assert-True (
