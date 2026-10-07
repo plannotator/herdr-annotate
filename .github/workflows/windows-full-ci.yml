@@ -19,6 +19,7 @@ on:
       - "scripts/test-http-server.py"
       - "scripts/test-windows-full-manifest.py"
       - "windows-full/**"
+      - "links/**"
       - ".github/workflows/windows-full-ci.yml"
   merge_group:
 

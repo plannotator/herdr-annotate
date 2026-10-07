@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke-test the plugin the way users get it: fresh install, upgrade from an old commit, lite,
-# and the lite -> full swap, exercising both fetched binaries and both panes in a disposable
-# Herdr session. Restores whatever `annotate` install was present before it ran.
+# the lite -> full swap, and the opt-in links add-on, exercising both fetched binaries and both
+# panes in a disposable Herdr session. Restores whatever `annotate` install was present before it ran.
 #
 #   HERDR_SESSION=<disposable named session> bash scripts/smoke.sh [old-ref]
 #
@@ -97,7 +97,7 @@ trap restore EXIT
 
 echo "== fresh install: full"
 install "$spec"
-check "actions" "$(actions)" "capture,copy-archive,copy-context,last,last-newest,manage,open,open-link,paste-archive,send-archive,terminal"
+check "actions" "$(actions)" "capture,copy-archive,copy-context,last,last-newest,manage,open,paste-archive,send-archive,terminal"
 check "action programs" "$(programs)" "./bin/herdr-annotate.exe,./bin/plannotator-tui.exe"
 check "review binary matches pin" "$(tui_version)" "$(tui_pin)"
 check "native binary matches pin" "$(native_version)" "$(native_pin)"
@@ -134,9 +134,26 @@ check "manager pane" "$(manager_renders)" "ok"
 
 echo "== swap: lite -> full"
 install "$spec"
-check "actions" "$(actions)" "capture,copy-archive,copy-context,last,last-newest,manage,open,open-link,paste-archive,send-archive,terminal"
+check "actions" "$(actions)" "capture,copy-archive,copy-context,last,last-newest,manage,open,paste-archive,send-archive,terminal"
 check "review binary" "$(tui_version)" "$(tui_pin)"
 check "native binary" "$(native_version)" "$(native_pin)"
+
+echo "== opt-in links add-on (#69)"
+link_handlers() { herdr plugin list --plugin "$1" --json | python3 -c "
+import json,sys
+plugins=json.load(sys.stdin)['result']['plugins']
+print(','.join(sorted(h['id'] for p in plugins for h in p.get('link_handlers',[]))) or 'none')"; }
+check "full declares no link handler" "$(link_handlers annotate)" "none"
+if herdr plugin list --plugin annotate-links --json | grep -q '"plugin_id":"annotate-links"'; then
+  echo "  note annotate-links is already installed here; skipping so it is left untouched"
+else
+  herdr plugin install "$spec/links" --yes >/dev/null
+  check "add-on link handlers" "$(link_handlers annotate-links)" "markdown-file"
+  check "add-on actions" "$(herdr plugin action list --plugin annotate-links | python3 -c "
+import json,sys; print(','.join(sorted(a['action_id'] for a in json.load(sys.stdin)['result']['actions'])))")" "open-link"
+  herdr plugin uninstall annotate-links >/dev/null
+  check "add-on removed" "$(link_handlers annotate-links)" "none"
+fi
 
 echo "== result: $failures failure(s)"
 [ "$failures" -eq 0 ]

@@ -1,0 +1,33 @@
+# Herdr Annotate, Links: opt-in Ctrl-click capture for file:// Markdown links.
+# Install with: herdr plugin install plannotator/herdr-annotate/links
+# Remove with:  herdr plugin uninstall annotate-links
+#
+# The Annotate plugin no longer claims these clicks itself, because Herdr matches link handlers
+# from the manifest before any plugin code runs and offers no way to turn one off. Keeping the
+# handler in its own plugin makes capture a choice: install this to send Markdown links to
+# Annotate, uninstall it to give them back to Herdr's default opener.
+#
+# This add-on ships no binary. Its action finds the installed `annotate` plugin and runs that
+# plugin's plannotator-tui exactly as the old built-in open-link action did, so it needs the
+# Full install (plannotator/herdr-annotate) on macOS or Linux.
+
+id = "annotate-links"
+name = "Annotate Links"
+version = "0.9.0"
+min_herdr_version = "0.8.0"
+description = "Open Ctrl-clicked file:// Markdown links in Annotate (needs the Annotate Full plugin)."
+platforms = ["macos", "linux"]
+
+[[actions]]
+id = "open-link"
+title = "Annotate this file"
+description = "Open a Ctrl-clicked Markdown file in plannotator-tui."
+contexts = ["pane"]
+command = ["bash", "open-link.sh"]
+
+# Anchored on the scheme so web links never match.
+[[link_handlers]]
+id = "markdown-file"
+title = "Annotate this file"
+pattern = "^file://.*\\.(md|markdown|mdx)$"
+action = "open-link"

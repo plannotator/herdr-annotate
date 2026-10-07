@@ -3,7 +3,7 @@
 #
 # Two things are proved here that the manifest test cannot see, because they are Herdr's
 # behaviour rather than the file's contents: 0.8.2 refuses the variant for its minimum, and
-# 0.9.0 accepts it and reports every action, pane and link handler as effective on Windows.
+# 0.9.0 accepts it and reports every action and pane as effective on Windows.
 # The plugin root contains spaces on purpose.
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
@@ -122,7 +122,7 @@ try {
     # variant installed and the review half silently unreachable, which is the state this
     # whole variant exists to end.
     $actionIds = @($plugin.actions | ForEach-Object { $_.id })
-    foreach ($id in @("capture", "copy-context", "copy-archive", "paste-archive", "send-archive", "manage", "open", "open-link", "last", "last-newest", "terminal")) {
+    foreach ($id in @("capture", "copy-context", "copy-archive", "paste-archive", "send-archive", "manage", "open", "last", "last-newest", "terminal")) {
       Assert-True ($actionIds -contains $id) "Herdr $version omitted action $id"
       $action = @($plugin.actions | Where-Object { $_.id -ceq $id })
       # @() at the call site: an empty array returned from a function unrolls to $null.
@@ -130,7 +130,7 @@ try {
       Assert-True ($platforms.Count -eq 0 -or $platforms -contains "windows") `
         "action $id is not effective on Windows: $($platforms -join ',')"
     }
-    Assert-True ($actionIds.Count -eq 11) "Herdr $version listed $($actionIds.Count) actions, expected 11"
+    Assert-True ($actionIds.Count -eq 10) "Herdr $version listed $($actionIds.Count) actions, expected 10"
 
     $paneIds = @($plugin.panes | ForEach-Object { $_.id })
     foreach ($id in @("editor", "manager", "doc")) {
@@ -152,10 +152,13 @@ try {
       $docCommand[2] -ceq "pane"
     ) "the doc pane is not direct argv: $($docCommand -join ' ')"
 
-    $handler = @($plugin.link_handlers | Where-Object { $_.id -ceq "markdown-file" })
-    Assert-True ($handler.Count -eq 1) "Herdr $version omitted the markdown-file link handler"
+    # Ctrl-click capture is opt-in (#69); Annotate itself must not claim any link.
+    # Herdr omits an empty list from the JSON, so read it through PSObject under StrictMode.
+    $handlerProperty = $plugin.PSObject.Properties['link_handlers']
+    $handlers = if ($null -eq $handlerProperty -or $null -eq $handlerProperty.Value) { @() } else { @($handlerProperty.Value) }
+    Assert-True ($handlers.Count -eq 0) "Herdr $version listed $($handlers.Count) link handlers, expected none"
 
-    Write-Output "herdr $version accepts windows-full: 11 actions, 3 panes, direct-argv doc pane"
+    Write-Output "herdr $version accepts windows-full: 10 actions, 3 panes, direct-argv doc pane"
   }
 } finally {
   foreach ($name in $isolatedNames) {

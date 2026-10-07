@@ -33,7 +33,6 @@ requirements, not completed verification. Every box starts unchecked.
   | `send-archive` | Send annotations to the agent and archive them | `pane` |
   | `manage` | Manage annotations | `global` |
   | `open` | Annotate: open here | `workspace`, `pane` |
-  | `open-link` | Annotate this file | `pane` |
   | `last` | Annotate: agent's last message | `pane` |
   | `last-newest` | Annotate: agent's newest message | `pane` |
   | `terminal` | Annotate: terminal output | `pane` |
@@ -43,13 +42,15 @@ requirements, not completed verification. Every box starts unchecked.
   command must be exactly `["./bin/plannotator-tui.exe", "herdr", "pane"]`.
   No shell, PowerShell, command-string interpolation, or fallback launcher may sit
   between Herdr's pane process and the TUI.
-- [ ] Keep `open` and `open-link` as direct argv ending in `herdr open`,
+- [ ] Keep `open` as direct argv ending in `herdr open`,
   `last` as direct argv ending in `herdr last`, `last-newest` as direct argv
   ending in `herdr last --newest`, and `terminal` as direct argv ending in
   `herdr terminal`, all using
-  `./bin/plannotator-tui.exe`. Preserve the `markdown-file` link handler's title,
-  pattern, and `open-link` action. All actions, panes, the handler, and the build
-  must be effective on Windows; no inherited Unix gate may disable them.
+  `./bin/plannotator-tui.exe`. All actions, panes, and the build must be
+  effective on Windows; no inherited Unix gate may disable them. Since plugin
+  0.9.0 ([#69](https://github.com/plannotator/herdr-annotate/issues/69)) the
+  variant declares no `[[link_handlers]]` and no `open-link` action: Ctrl-click
+  capture is opt-in through the macOS/Linux `links/` add-on.
 - [ ] Reuse the shared native runtime with paths valid from `windows-full/`
   (as `lite/` does with `../bin/`). Verify those paths from an installed checkout,
   not just the repository root. Preserve shared annotation state and archive
@@ -136,8 +137,7 @@ does not establish that a real Herdr pane works.
 - [ ] Pass a relative `PLANNOTATOR_TUI_FILE` that exists only in the review cwd,
   then an absolute path with spaces and Unicode. Assert each intended document
   renders. Verify delivery target variables supplied by the launcher survive
-  unchanged. Exercise `open`, `open-link` (including a percent-encoded `file://`
-  path), `last`, and `last-newest` with controlled context/transcript fixtures. Record fixture
+  unchanged. Exercise `open`, `last`, and `last-newest` with controlled context/transcript fixtures. Record fixture
   evidence separately from real-agent integration.
 - [ ] Open Full with inert review-folder `.env` fixtures that would change a
   launcher process. Full must render the intended document without loading those

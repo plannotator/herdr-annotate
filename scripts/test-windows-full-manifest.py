@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the gated distributed Full manifest, Windows Full, and development parity."""
+"""Check the gated distributed Full manifest, Windows Full, the Links add-on, and development parity."""
 
 from __future__ import annotations
 
@@ -73,9 +73,12 @@ DEVELOPMENT_PANE = [
 ]
 ACTION_COMMANDS = {
     "open": [PROGRAM, "herdr", "open"],
-    "open-link": [PROGRAM, "herdr", "open"],
     "last": [PROGRAM, "herdr", "last"],
 }
+# Ctrl-click capture is opt-in (#69): only the links/ add-on may declare a link handler.
+LINKS_ID = "annotate-links"
+LINKS_ACTION = ["bash", "open-link.sh"]
+LINKS_PATTERN = "^file://.*\\.(md|markdown|mdx)$"
 DEVELOPMENT_BUILDS = [
     ["cargo", "build", "--release", "--manifest-path", "../Cargo.toml"],
     ["bash", "stage-plannotator-tui.sh"],
@@ -195,11 +198,7 @@ def check_distributed(path: Path, version_path: Path, native_version_path: Path)
         if any("sh" in argument.lower() or "$" in argument for argument in expected):
             fail(path, f"shell found in actions.{entry_id}: {expected!r}")
 
-    handler = entry(path, manifest, "link_handlers", "markdown-file")
-    if platforms(path, manifest, handler) != FULL_PLATFORMS:
-        fail(path, "link_handlers.markdown-file platforms are not macOS/Linux")
-    if handler.get("action") != "open-link":
-        fail(path, f"markdown-file points to {handler.get('action')!r}")
+    check_no_link_capture(path, manifest)
 
 
 def check_development(path: Path) -> None:
@@ -230,11 +229,53 @@ def check_development(path: Path) -> None:
         if action.get("command") != expected:
             fail(path, f"development actions.{entry_id} differs: {action.get('command')!r}")
 
+
+
+def check_no_link_capture(path: Path, manifest: dict[str, object]) -> None:
+    """A link handler in an Annotate install would capture Ctrl-click for every user (#69)."""
+    if manifest.get("link_handlers"):
+        fail(path, "Annotate must not declare [[link_handlers]]; they belong in links/")
+    if any(
+        isinstance(item, dict) and item.get("id") == "open-link"
+        for item in manifest.get("actions", [])
+    ):
+        fail(path, "the open-link action moved to the links/ add-on")
+
+
+def check_links(path: Path, root_path: Path) -> None:
+    """The opt-in add-on: one handler, one action, no binary of its own."""
+    manifest = load(path)
+    root = load(root_path)
+    if manifest.get("id") != LINKS_ID:
+        fail(path, f"id must be {LINKS_ID!r}, found {manifest.get('id')!r}")
+    if manifest.get("version") != root.get("version"):
+        fail(path, f"version {manifest.get('version')!r} differs from the root manifest")
+    if platforms(path, manifest, {}) != FULL_PLATFORMS:
+        fail(path, f"top-level platforms are {platforms(path, manifest, {})!r}")
+    if builds(path, manifest):
+        fail(path, "the add-on must not build or fetch a binary of its own")
+    for table in ("panes", "events", "startup"):
+        if manifest.get(table):
+            fail(path, f"the add-on declares [[{table}]]")
+
+    actions = manifest.get("actions", [])
+    if not isinstance(actions, list) or len(actions) != 1:
+        fail(path, "expected exactly one action")
+    action = entry(path, manifest, "actions", "open-link")
+    if action.get("command") != LINKS_ACTION:
+        fail(path, f"unexpected actions.open-link argv: {action.get('command')!r}")
+    script = path.parent / LINKS_ACTION[1]
+    if not script.is_file():
+        fail(path, f"action script {script} does not exist")
+
+    handlers = manifest.get("link_handlers", [])
+    if not isinstance(handlers, list) or len(handlers) != 1:
+        fail(path, "expected exactly one link handler")
     handler = entry(path, manifest, "link_handlers", "markdown-file")
-    if "windows" not in platforms(path, manifest, handler):
-        fail(path, "development markdown-file lost Windows support")
+    if handler.get("pattern") != LINKS_PATTERN:
+        fail(path, f"unexpected markdown-file pattern: {handler.get('pattern')!r}")
     if handler.get("action") != "open-link":
-        fail(path, f"development markdown-file points to {handler.get('action')!r}")
+        fail(path, f"markdown-file points to {handler.get('action')!r}")
 
 
 def surface(path: Path, manifest: dict[str, object], table: str) -> set[tuple[object, ...]]:
@@ -328,11 +369,7 @@ def check_windows_full(path: Path, root_path: Path) -> None:
     if doc.get("command") != WINDOWS_FULL_PANE:
         fail(path, f"panes.doc must be direct argv, found {doc.get('command')!r}")
 
-    handler = entry(path, manifest, "link_handlers", "markdown-file")
-    root_handler = entry(root_path, root, "link_handlers", "markdown-file")
-    for key in ("title", "pattern", "action"):
-        if handler.get(key) != root_handler.get(key):
-            fail(path, f"markdown-file {key} differs from the root manifest")
+    check_no_link_capture(path, manifest)
 
 
 def main() -> None:
@@ -348,6 +385,9 @@ def main() -> None:
         root / "windows-full" / "herdr-plugin.toml",
         root / "herdr-plugin.toml",
     )
+    lite = root / "lite" / "herdr-plugin.toml"
+    check_no_link_capture(lite, load(lite))
+    check_links(root / "links" / "herdr-plugin.toml", root / "herdr-plugin.toml")
     if len(sys.argv) == 2:
         check_development(Path(sys.argv[1]))
 
