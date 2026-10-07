@@ -104,7 +104,8 @@ command = ["./bin/plannotator-tui.exe", "herdr", "pane"]
 
 # The review actions run the TUI directly, which reads Herdr's invocation context (the focused
 # pane's folder and agent) and sends the review back to that agent. Ctrl-click on a
-# file:// Markdown link is not captured, so the click keeps Herdr's default behavior.
+# file:// Markdown link is not captured here; the opt-in links/ add-on declares that handler
+# and runs this variant's plannotator-tui, so a plain install keeps Herdr's default behavior.
 [[actions]]
 id = "open"
 title = "Annotate: open here"

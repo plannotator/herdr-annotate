@@ -148,9 +148,9 @@ if herdr plugin list --plugin annotate-links --json | grep -q '"plugin_id":"anno
   echo "  note annotate-links is already installed here; skipping so it is left untouched"
 else
   herdr plugin install "$spec/links" --yes >/dev/null
-  check "add-on link handlers" "$(link_handlers annotate-links)" "markdown-file"
-  check "add-on actions" "$(herdr plugin action list --plugin annotate-links | python3 -c "
-import json,sys; print(','.join(sorted(a['action_id'] for a in json.load(sys.stdin)['result']['actions'])))")" "open-link"
+  check "add-on link handlers" "$(link_handlers annotate-links)" "markdown-file,markdown-file-windows"
+  check "add-on Unix action" "$(herdr plugin action list --plugin annotate-links | python3 -c "
+import json,sys; print('open-link' if any(a['action_id']=='open-link' for a in json.load(sys.stdin)['result']['actions']) else 'missing')")" "open-link"
   herdr plugin uninstall annotate-links >/dev/null
   check "add-on removed" "$(link_handlers annotate-links)" "none"
 fi

@@ -229,7 +229,8 @@ description = "review this pane's recent output"
 
 Annotate does not capture Ctrl-click on links by default, so `file://…md` links open the way
 Herdr normally opens them. To send Ctrl-clicked `file://` Markdown links (`.md`, `.markdown`,
-`.mdx`) to Annotate instead, install the Links add-on next to the Full install (macOS and Linux):
+`.mdx`) to Annotate instead, install the Links add-on next to the Full install (on Windows, next
+to Windows Full):
 
 ```sh
 herdr plugin install plannotator/herdr-annotate/links
@@ -241,7 +242,8 @@ To turn it off again:
 herdr plugin uninstall annotate-links
 ```
 
-The add-on has no binary of its own; it opens the file with the Full plugin's plannotator-tui.
+The add-on has no binary of its own; it opens the file with the Full (or Windows Full) plugin's
+plannotator-tui. If neither is installed, Ctrl-click shows a notification saying which one to install.
 
 > **Upgrading from 0.8.0 or earlier:** up to plugin 0.8.0, the Full install captured these clicks
 > itself. From 0.9.0 it does not

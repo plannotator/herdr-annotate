@@ -50,7 +50,8 @@ requirements, not completed verification. Every box starts unchecked.
   effective on Windows; no inherited Unix gate may disable them. Since plugin
   0.9.0 ([#69](https://github.com/plannotator/herdr-annotate/issues/69)) the
   variant declares no `[[link_handlers]]` and no `open-link` action: Ctrl-click
-  capture is opt-in through the macOS/Linux `links/` add-on.
+  capture is opt-in through the `links/` add-on, whose `open-link-windows` action
+  runs `links/open-link.ps1` against this variant's staged plannotator-tui.
 - [ ] Reuse the shared native runtime with paths valid from `windows-full/`
   (as `lite/` does with `../bin/`). Verify those paths from an installed checkout,
   not just the repository root. Preserve shared annotation state and archive

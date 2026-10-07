@@ -77,8 +77,25 @@ ACTION_COMMANDS = {
 }
 # Ctrl-click capture is opt-in (#69): only the links/ add-on may declare a link handler.
 LINKS_ID = "annotate-links"
-LINKS_ACTION = ["bash", "open-link.sh"]
 LINKS_PATTERN = "^file://.*\\.(md|markdown|mdx)$"
+# handler id -> (action id, action argv, script, platforms)
+LINKS_ROUTES = {
+    "markdown-file": ("open-link", ["bash", "open-link.sh"], "open-link.sh", FULL_PLATFORMS),
+    "markdown-file-windows": (
+        "open-link-windows",
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            "open-link.ps1",
+        ],
+        "open-link.ps1",
+        {"windows"},
+    ),
+}
 DEVELOPMENT_BUILDS = [
     ["cargo", "build", "--release", "--manifest-path", "../Cargo.toml"],
     ["bash", "stage-plannotator-tui.sh"],
@@ -243,14 +260,14 @@ def check_no_link_capture(path: Path, manifest: dict[str, object]) -> None:
 
 
 def check_links(path: Path, root_path: Path) -> None:
-    """The opt-in add-on: one handler, one action, no binary of its own."""
+    """The opt-in add-on: one handler and action per platform family, no binary of its own."""
     manifest = load(path)
     root = load(root_path)
     if manifest.get("id") != LINKS_ID:
         fail(path, f"id must be {LINKS_ID!r}, found {manifest.get('id')!r}")
     if manifest.get("version") != root.get("version"):
         fail(path, f"version {manifest.get('version')!r} differs from the root manifest")
-    if platforms(path, manifest, {}) != FULL_PLATFORMS:
+    if platforms(path, manifest, {}) != {"macos", "linux", "windows"}:
         fail(path, f"top-level platforms are {platforms(path, manifest, {})!r}")
     if builds(path, manifest):
         fail(path, "the add-on must not build or fetch a binary of its own")
@@ -259,23 +276,32 @@ def check_links(path: Path, root_path: Path) -> None:
             fail(path, f"the add-on declares [[{table}]]")
 
     actions = manifest.get("actions", [])
-    if not isinstance(actions, list) or len(actions) != 1:
-        fail(path, "expected exactly one action")
-    action = entry(path, manifest, "actions", "open-link")
-    if action.get("command") != LINKS_ACTION:
-        fail(path, f"unexpected actions.open-link argv: {action.get('command')!r}")
-    script = path.parent / LINKS_ACTION[1]
-    if not script.is_file():
-        fail(path, f"action script {script} does not exist")
-
     handlers = manifest.get("link_handlers", [])
-    if not isinstance(handlers, list) or len(handlers) != 1:
-        fail(path, "expected exactly one link handler")
-    handler = entry(path, manifest, "link_handlers", "markdown-file")
-    if handler.get("pattern") != LINKS_PATTERN:
-        fail(path, f"unexpected markdown-file pattern: {handler.get('pattern')!r}")
-    if handler.get("action") != "open-link":
-        fail(path, f"markdown-file points to {handler.get('action')!r}")
+    if not isinstance(actions, list) or len(actions) != len(LINKS_ROUTES):
+        fail(path, f"expected exactly {len(LINKS_ROUTES)} actions")
+    if not isinstance(handlers, list) or len(handlers) != len(LINKS_ROUTES):
+        fail(path, f"expected exactly {len(LINKS_ROUTES)} link handlers")
+    covered: set[str] = set()
+    for handler_id, (action_id, argv, script, expected) in LINKS_ROUTES.items():
+        handler = entry(path, manifest, "link_handlers", handler_id)
+        if handler.get("pattern") != LINKS_PATTERN:
+            fail(path, f"unexpected {handler_id} pattern: {handler.get('pattern')!r}")
+        if handler.get("action") != action_id:
+            fail(path, f"{handler_id} points to {handler.get('action')!r}")
+        if platforms(path, manifest, handler) != expected:
+            fail(path, f"{handler_id} platforms are {platforms(path, manifest, handler)!r}")
+        action = entry(path, manifest, "actions", action_id)
+        if action.get("command") != argv:
+            fail(path, f"unexpected actions.{action_id} argv: {action.get('command')!r}")
+        if platforms(path, manifest, action) != expected:
+            fail(path, f"actions.{action_id} platforms are {platforms(path, manifest, action)!r}")
+        if not (path.parent / script).is_file():
+            fail(path, f"action script {path.parent / script} does not exist")
+        if covered & expected:
+            fail(path, f"{handler_id} overlaps another handler's platforms")
+        covered |= expected
+    if covered != {"macos", "linux", "windows"}:
+        fail(path, f"handlers cover {covered!r}, not every platform")
 
 
 def surface(path: Path, manifest: dict[str, object], table: str) -> set[tuple[object, ...]]:

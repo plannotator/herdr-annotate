@@ -8,22 +8,35 @@
 # Annotate, uninstall it to give them back to Herdr's default opener.
 #
 # This add-on ships no binary. Its action finds the installed `annotate` plugin and runs that
-# plugin's plannotator-tui exactly as the old built-in open-link action did, so it needs the
-# Full install (plannotator/herdr-annotate) on macOS or Linux.
+# plugin's plannotator-tui exactly as the old built-in open-link action did, so it needs a Full
+# install: plannotator/herdr-annotate on macOS or Linux, plannotator/herdr-annotate/windows-full
+# on Windows. Herdr rejects duplicate ids, so each platform family has its own action and
+# handler; Herdr skips a handler whose platforms exclude the current one.
 
 id = "annotate-links"
 name = "Annotate Links"
 version = "0.9.0"
 min_herdr_version = "0.8.0"
 description = "Open Ctrl-clicked file:// Markdown links in Annotate (needs the Annotate Full plugin)."
-platforms = ["macos", "linux"]
+platforms = ["linux", "macos", "windows"]
 
 [[actions]]
 id = "open-link"
 title = "Annotate this file"
 description = "Open a Ctrl-clicked Markdown file in plannotator-tui."
 contexts = ["pane"]
+platforms = ["macos", "linux"]
 command = ["bash", "open-link.sh"]
+
+# The same invocation idiom as the Windows build hooks: powershell.exe comes from PATH, never
+# from the plugin root, and the script path is relative to the root Herdr runs actions from.
+[[actions]]
+id = "open-link-windows"
+title = "Annotate this file"
+description = "Open a Ctrl-clicked Markdown file in plannotator-tui."
+contexts = ["pane"]
+platforms = ["windows"]
+command = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "open-link.ps1"]
 
 # Anchored on the scheme so web links never match.
 [[link_handlers]]
@@ -31,3 +44,11 @@ id = "markdown-file"
 title = "Annotate this file"
 pattern = "^file://.*\\.(md|markdown|mdx)$"
 action = "open-link"
+platforms = ["macos", "linux"]
+
+[[link_handlers]]
+id = "markdown-file-windows"
+title = "Annotate this file"
+pattern = "^file://.*\\.(md|markdown|mdx)$"
+action = "open-link-windows"
+platforms = ["windows"]
