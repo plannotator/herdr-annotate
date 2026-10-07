@@ -155,7 +155,8 @@ try {
     # Ctrl-click capture is opt-in (#69); Annotate itself must not claim any link.
     # Herdr omits an empty list from the JSON, so read it through PSObject under StrictMode.
     $handlerProperty = $plugin.PSObject.Properties['link_handlers']
-    $handlers = if ($null -eq $handlerProperty -or $null -eq $handlerProperty.Value) { @() } else { @($handlerProperty.Value) }
+    # @() around the whole if: an empty array returned from a statement unrolls to $null.
+    $handlers = @(if ($null -ne $handlerProperty -and $null -ne $handlerProperty.Value) { $handlerProperty.Value })
     Assert-True ($handlers.Count -eq 0) "Herdr $version listed $($handlers.Count) link handlers, expected none"
 
     Write-Output "herdr $version accepts windows-full: 10 actions, 3 panes, direct-argv doc pane"
