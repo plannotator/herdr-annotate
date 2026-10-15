@@ -17,7 +17,7 @@ use crate::edit_keys::{EditAction, line_end, line_start, resolve_edit_key, word_
 use crate::format::{sanitize_terminal_text, wrap_text};
 use crate::layout::layout_comment;
 use crate::paths::state_dir;
-use crate::store::{append_annotation, append_annotation_context_first};
+use crate::store::{append_annotation, append_annotation_context_first, update_annotation_comment};
 use crate::termination::Termination;
 use crate::types::{
     Annotation, PendingAnnotation, javascript_trim, parse_pending_annotation,
@@ -35,6 +35,7 @@ const DEFAULT_ROWS: u16 = 22;
 pub struct EditorApp {
     pending: PendingAnnotation,
     saved_field_order: SavedFieldOrder,
+    saved_comment: Option<SavedComment>,
     comment: Vec<char>,
     cursor: usize,
     status: String,
@@ -57,11 +58,38 @@ impl EditorApp {
         Self {
             pending,
             saved_field_order,
+            saved_comment: None,
             comment: Vec::new(),
             cursor: 0,
             status: String::new(),
             quit: false,
         }
+    }
+
+    /// Start an editor with a saved annotation's comment and metadata.
+    pub(crate) fn edit(annotation: Annotation) -> Self {
+        let pending = PendingAnnotation {
+            selected_text: annotation.selected_text,
+            context: annotation.context,
+            captured_at: annotation.captured_at,
+        };
+        let comment = annotation.comment.chars().collect::<Vec<_>>();
+        Self {
+            pending,
+            saved_field_order: SavedFieldOrder::CapturedAtThenContext,
+            saved_comment: Some(SavedComment {
+                annotation_id: annotation.id,
+                value: annotation.comment,
+            }),
+            cursor: comment.len(),
+            comment,
+            status: String::new(),
+            quit: false,
+        }
+    }
+
+    pub(crate) fn should_quit(&self) -> bool {
+        self.quit
     }
 
     /// Draw the same selected-text, comment, and footer regions as the TypeScript editor.
@@ -275,7 +303,7 @@ impl EditorApp {
         self.cursor = next;
     }
 
-    fn save(&mut self, dir: Option<&Path>) -> bool {
+    pub(crate) fn save(&mut self, dir: Option<&Path>) -> bool {
         let value = self.comment.iter().collect::<String>();
         let value = javascript_trim(&value).to_owned();
         if value.is_empty() {
@@ -286,16 +314,30 @@ impl EditorApp {
             "Plugin state directory is unavailable.".clone_into(&mut self.status);
             return false;
         };
-        let annotation = Annotation::from_pending(
-            self.pending.clone(),
-            Uuid::new_v4().to_string(),
-            value,
-            now_iso(),
-        );
-        let saved = match self.saved_field_order {
-            SavedFieldOrder::CapturedAtThenContext => append_annotation(dir, &annotation),
-            SavedFieldOrder::ContextThenCapturedAt => {
-                append_annotation_context_first(dir, &annotation)
+        let saved = if let Some(saved_comment) = &self.saved_comment {
+            update_annotation_comment(
+                dir,
+                &saved_comment.annotation_id,
+                &saved_comment.value,
+                &value,
+            )
+            .and_then(|found| {
+                found
+                    .then_some(())
+                    .ok_or_else(|| "Annotation no longer exists.".to_owned())
+            })
+        } else {
+            let annotation = Annotation::from_pending(
+                self.pending.clone(),
+                Uuid::new_v4().to_string(),
+                value,
+                now_iso(),
+            );
+            match self.saved_field_order {
+                SavedFieldOrder::CapturedAtThenContext => append_annotation(dir, &annotation),
+                SavedFieldOrder::ContextThenCapturedAt => {
+                    append_annotation_context_first(dir, &annotation)
+                }
             }
         };
         match saved {
@@ -402,6 +444,12 @@ pub fn run() -> Result<(), String> {
     })();
     ratatui::restore();
     result
+}
+
+#[derive(Debug)]
+struct SavedComment {
+    annotation_id: String,
+    value: String,
 }
 
 #[cfg(test)]
