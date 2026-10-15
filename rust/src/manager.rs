@@ -17,14 +17,15 @@ use crate::archive_workflow::{
     RestoreArchivedSetOutcome, copy_and_archive_annotations, restore_archived_set,
 };
 use crate::clipboard::write_clipboard;
-use crate::editor::now_iso_for_manager;
+use crate::editor::{EditorApp, now_iso_for_manager};
 use crate::format::{sanitize_terminal_text, wrap_text};
 use crate::manager_copy::{ManagerCopyOutcome, copy_annotations};
 use crate::pane_clipboard::{emit_to_terminal, write_pane_clipboard};
 use crate::paths::state_dir;
 use crate::store::{
     append_archived_set, capture_order_annotations, load_annotations, load_archived_sets,
-    merge_annotations, newest_first_archived_sets, remove_annotations_by_id, remove_archived_set,
+    merge_annotations, newest_first_archived_sets, remove_annotations_by_id,
+    remove_annotations_if_unchanged, remove_archived_set,
 };
 use crate::termination::Termination;
 use crate::types::{Annotation, ArchivedAnnotationSet};
@@ -54,6 +55,7 @@ pub struct ManagerApp {
     view: ManagerView,
     status: String,
     confirmation: Confirmation,
+    editing: Option<EditorApp>,
     quit: bool,
 }
 
@@ -69,6 +71,7 @@ impl ManagerApp {
             view: ManagerView::Active,
             status: String::new(),
             confirmation: Confirmation::None,
+            editing: None,
             quit: false,
         };
         app.reload_active();
@@ -107,6 +110,10 @@ impl ManagerApp {
 
     /// Draw the list/detail manager layout and context-specific footer.
     pub fn draw(&self, frame: &mut Frame<'_>) {
+        if let Some(editor) = &self.editing {
+            editor.draw(frame);
+            return;
+        }
         let area = frame.area();
         frame.render_widget(Clear, area);
         let cols = usize::from(area.width.max(50));
@@ -421,7 +428,8 @@ impl ManagerApp {
         }
         match self.view {
             ManagerView::Active => {
-                "j/k · y copy · c all · Shift+C copy+archive · d delete · Shift+D clear · Tab archives · q".to_owned()
+                "j/k · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q"
+                    .to_owned()
             }
             ManagerView::Archives => {
                 "j/k · y copy · u restore · d twice delete · Tab active · q".to_owned()
@@ -431,6 +439,10 @@ impl ManagerApp {
 
     /// Handle one keyboard event and any requested store/clipboard transition.
     pub fn handle_key(&mut self, key: KeyEvent) {
+        if self.editing.is_some() {
+            self.handle_edit_key(key);
+            return;
+        }
         if key.kind == KeyEventKind::Release {
             return;
         }
@@ -481,6 +493,7 @@ impl ManagerApp {
                     (self.active_selected + 1).min(self.annotations.len().saturating_sub(1));
             }
             KeyCode::Char('C') => self.copy_and_archive(),
+            KeyCode::Char('e') => self.edit_selected_annotation(),
             KeyCode::Char('y') => {
                 let items = self
                     .annotations
@@ -550,13 +563,37 @@ impl ManagerApp {
         }
     }
 
+    fn edit_selected_annotation(&mut self) {
+        let Some(annotation) = self.annotations.get(self.active_selected).cloned() else {
+            return;
+        };
+        self.editing = Some(EditorApp::edit(annotation));
+    }
+
+    fn handle_edit_key(&mut self, key: KeyEvent) {
+        let Some(editor) = self.editing.as_mut() else {
+            return;
+        };
+        if editor.handle_key(key) {
+            if editor.save(Some(&self.dir)) {
+                self.editing = None;
+                if self.reload_active() {
+                    "Annotation updated.".clone_into(&mut self.status);
+                }
+            }
+        } else if editor.should_quit() {
+            self.editing = None;
+            self.status.clear();
+        }
+    }
+
     fn copy_and_archive(&mut self) {
         let dir = self.dir.clone();
         let outcome = copy_and_archive_annotations(CopyAndArchiveDependencies {
             load_active: || load_annotations(&dir),
             deliver: |text: String| pane_clipboard_write(&text),
             save_archive: |archive: ArchivedAnnotationSet| append_archived_set(&dir, &archive),
-            remove_active: |ids: Vec<String>| remove_annotations_by_id(&dir, &ids),
+            remove_active: |items: Vec<Annotation>| remove_annotations_if_unchanged(&dir, &items),
             create_archive_id: || Uuid::new_v4().to_string(),
             now: now_iso_for_manager,
         });
@@ -827,7 +864,235 @@ mod tests {
         assert!(one < two);
         assert!(frame.iter().any(|row| row.contains("oldest first")));
         assert!(frame.iter().any(|row| row.contains("comment one")));
-        assert!(frame.iter().any(|row| row.contains("Shift+C copy+archive")));
+        assert!(frame.iter().any(|row| row.contains("e edit")));
+        assert!(frame.iter().any(|row| row.contains("C copy+archive")));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn selected_annotation_can_be_edited_without_changing_its_metadata() {
+        let dir = directory();
+        let mut original = annotation("one");
+        original.created_at = "2026-08-09T00:00:01Z".to_owned();
+        original.comment = "comment 한글\nsecond line".to_owned();
+        let other = annotation("two");
+        append_annotation(&dir, &original).expect("one");
+        append_annotation(&dir, &other).expect("two");
+        let mut app = ManagerApp::load(dir.clone());
+
+        // Display order differs from store order; edit the second displayed annotation.
+        app.handle_key(KeyEvent::from(KeyCode::Down));
+        app.handle_key(KeyEvent::from(KeyCode::Char('e')));
+        assert!(rows(&app).iter().any(|row| row.contains("second line")));
+        app.handle_key(KeyEvent::from(KeyCode::Char('!')));
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
+
+        let mut expected = original;
+        expected.comment.push('!');
+        assert_eq!(
+            load_annotations(&dir).expect("updated annotations"),
+            [expected, other]
+        );
+        let frame = rows(&app);
+        assert!(frame.iter().any(|row| row.contains("Annotations (2)")));
+        assert!(frame.iter().any(|row| row.contains("second line!")));
+        assert!(frame.iter().any(|row| row.contains("Annotation updated.")));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn canceling_an_annotation_edit_keeps_the_saved_comment() {
+        let dir = directory();
+        let original = annotation("one");
+        append_annotation(&dir, &original).expect("annotation");
+        let mut app = ManagerApp::load(dir.clone());
+
+        for cancel in [
+            KeyEvent::from(KeyCode::Esc),
+            KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+        ] {
+            app.handle_key(KeyEvent::from(KeyCode::Char('e')));
+            app.handle_key(KeyEvent::from(KeyCode::Char('!')));
+            app.handle_key(cancel);
+
+            assert!(rows(&app).iter().any(|row| row.contains("Annotations (1)")));
+            assert_eq!(
+                load_annotations(&dir).expect("unchanged annotation"),
+                std::slice::from_ref(&original)
+            );
+        }
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn blank_edit_stays_open_without_replacing_the_saved_comment() {
+        let dir = directory();
+        let original = annotation("one");
+        append_annotation(&dir, &original).expect("annotation");
+        let mut app = ManagerApp::load(dir.clone());
+
+        app.handle_key(KeyEvent::from(KeyCode::Char('e')));
+        app.handle_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
+        app.handle_key(KeyEvent::from(KeyCode::Char(' ')));
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
+
+        let frame = rows(&app);
+        assert!(
+            frame
+                .iter()
+                .any(|row| row.contains("Write a comment before saving."))
+        );
+        assert!(frame.iter().any(|row| row.contains("Selected text")));
+        assert_eq!(
+            load_annotations(&dir).expect("unchanged"),
+            std::slice::from_ref(&original)
+        );
+
+        app.handle_key(KeyEvent::from(KeyCode::Char('!')));
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
+        let mut expected = original;
+        expected.comment = "!".to_owned();
+        assert_eq!(load_annotations(&dir).expect("updated"), [expected]);
+        assert!(
+            rows(&app)
+                .iter()
+                .any(|row| row.contains("Annotation updated."))
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn failed_edit_can_retry_without_losing_the_draft_or_other_annotations() {
+        let dir = directory();
+        let original = annotation("one");
+        append_annotation(&dir, &original).expect("annotation");
+        let mut app = ManagerApp::load(dir.clone());
+        app.handle_key(KeyEvent::from(KeyCode::Char('e')));
+        app.handle_key(KeyEvent::from(KeyCode::Char('!')));
+        let path = dir.join("annotations.jsonl");
+        let before = fs::read(&path).expect("original store");
+        let lock = dir.join(".annotations.lock");
+        fs::create_dir(&lock).expect("contending writer");
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
+
+        let frame = rows(&app);
+        assert!(
+            frame
+                .iter()
+                .any(|row| row.contains("Annotations are busy; try again."))
+        );
+        assert!(frame.iter().any(|row| row.contains("comment one!")));
+        assert_eq!(fs::read(&path).expect("unchanged store"), before);
+
+        fs::remove_dir(&lock).expect("release lock");
+        let other = annotation("two");
+        append_annotation(&dir, &other).expect("concurrent append");
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
+
+        let mut expected = original;
+        expected.comment.push('!');
+        assert_eq!(load_annotations(&dir).expect("updated"), [expected, other]);
+        assert!(rows(&app).iter().any(|row| row.contains("Annotations (2)")));
+        assert!(
+            rows(&app)
+                .iter()
+                .any(|row| row.contains("Annotation updated."))
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn stale_edit_keeps_the_draft_without_overwriting_another_managers_save() {
+        let dir = directory();
+        let original = annotation("one");
+        append_annotation(&dir, &original).expect("annotation");
+        let mut first = ManagerApp::load(dir.clone());
+        let mut second = ManagerApp::load(dir.clone());
+        first.handle_key(KeyEvent::from(KeyCode::Char('e')));
+        second.handle_key(KeyEvent::from(KeyCode::Char('e')));
+
+        first.handle_key(KeyEvent::from(KeyCode::Char('!')));
+        first.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
+        let mut expected = original;
+        expected.comment.push('!');
+        assert_eq!(
+            load_annotations(&dir).expect("first save"),
+            std::slice::from_ref(&expected)
+        );
+
+        second.handle_key(KeyEvent::from(KeyCode::Char('?')));
+        for _ in 0..2 {
+            second.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
+
+            assert_eq!(
+                load_annotations(&dir).expect("first save preserved"),
+                std::slice::from_ref(&expected)
+            );
+            let frame = rows(&second);
+            assert!(
+                frame
+                    .iter()
+                    .any(|row| row.contains("Comment changed in another pane."))
+            );
+            assert!(frame.iter().any(|row| row.contains("comment one?")));
+        }
+
+        second.handle_key(KeyEvent::from(KeyCode::Esc));
+        second.handle_key(KeyEvent::from(KeyCode::Char('r')));
+        second.handle_key(KeyEvent::from(KeyCode::Char('e')));
+        assert!(rows(&second).iter().any(|row| row.contains("comment one!")));
+        second.handle_key(KeyEvent::from(KeyCode::Char('?')));
+        second.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
+        expected.comment.push('?');
+        assert_eq!(
+            load_annotations(&dir).expect("fresh edit saved"),
+            [expected]
+        );
+        assert!(
+            rows(&second)
+                .iter()
+                .any(|row| row.contains("Annotation updated."))
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn editing_a_removed_annotation_does_not_recreate_it() {
+        let dir = directory();
+        let original = annotation("one");
+        append_annotation(&dir, &original).expect("annotation");
+        let mut app = ManagerApp::load(dir.clone());
+        app.handle_key(KeyEvent::from(KeyCode::Char('e')));
+        app.handle_key(KeyEvent::from(KeyCode::Char('!')));
+        remove_annotations_by_id(&dir, &[original.id]).expect("concurrent removal");
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
+
+        let frame = rows(&app);
+        assert!(
+            frame
+                .iter()
+                .any(|row| row.contains("Annotation no longer exists."))
+        );
+        assert!(frame.iter().any(|row| row.contains("comment one!")));
+        assert!(load_annotations(&dir).expect("still removed").is_empty());
+        app.handle_key(KeyEvent::from(KeyCode::Esc));
+        app.handle_key(KeyEvent::from(KeyCode::Char('r')));
+        assert!(rows(&app).iter().any(|row| row.contains("Annotations (0)")));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn edit_is_ignored_without_an_active_selection() {
+        let dir = directory();
+        let mut app = ManagerApp::load(dir.clone());
+        app.handle_key(KeyEvent::from(KeyCode::Char('e')));
+        assert!(rows(&app).iter().any(|row| row.contains("Annotations (0)")));
+        app.handle_key(KeyEvent::from(KeyCode::Tab));
+        app.handle_key(KeyEvent::from(KeyCode::Char('e')));
+        assert!(rows(&app).iter().any(|row| row.contains("Archives (0)")));
+        assert!(load_annotations(&dir).expect("empty store").is_empty());
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -846,6 +1111,7 @@ mod tests {
         .expect("archive");
         let mut app = ManagerApp::load(dir.clone());
         app.handle_key(KeyEvent::from(KeyCode::Tab));
+        app.handle_key(KeyEvent::from(KeyCode::Char('e')));
         let frame = rows(&app);
         assert!(
             frame

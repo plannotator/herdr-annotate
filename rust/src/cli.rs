@@ -20,11 +20,12 @@ use crate::handoff::take_default_handoff;
 use crate::herdr::{notify, run_herdr, run_herdr_output};
 use crate::paths::{normalize_windows_path, plugin_root, state_dir};
 use crate::store::{
-    append_archived_set, capture_order_annotations, load_annotations, remove_annotations_by_id,
+    append_archived_set, capture_order_annotations, load_annotations,
+    remove_annotations_if_unchanged,
 };
 use crate::types::{
-    ArchivedAnnotationSet, PendingAnnotation, javascript_trim, parse_invocation_context,
-    selected_text_from_invocation,
+    Annotation, ArchivedAnnotationSet, PendingAnnotation, javascript_trim,
+    parse_invocation_context, selected_text_from_invocation,
 };
 
 const USAGE: &str = "Usage: herdr-annotate \
@@ -201,7 +202,7 @@ fn copy_archive() -> Result<(), String> {
         },
         deliver: |text: String| write_clipboard(&text),
         save_archive: |archive: ArchivedAnnotationSet| append_archived_set(&dir, &archive),
-        remove_active: |ids: Vec<String>| remove_annotations_by_id(&dir, &ids),
+        remove_active: |items: Vec<Annotation>| remove_annotations_if_unchanged(&dir, &items),
         create_archive_id: || Uuid::new_v4().to_string(),
         now: now_iso,
     });
@@ -304,7 +305,7 @@ fn deliver_archive(delivery: Delivery) -> Result<(), String> {
             Ok(())
         },
         save_archive: |archive: ArchivedAnnotationSet| append_archived_set(&dir, &archive),
-        remove_active: |ids: Vec<String>| remove_annotations_by_id(&dir, &ids),
+        remove_active: |items: Vec<Annotation>| remove_annotations_if_unchanged(&dir, &items),
         create_archive_id: || Uuid::new_v4().to_string(),
         now: now_iso,
     });

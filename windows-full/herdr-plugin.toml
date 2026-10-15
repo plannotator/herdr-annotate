@@ -74,7 +74,7 @@ command = ["../bin/herdr-annotate.exe", "send-archive"]
 [[actions]]
 id = "manage"
 title = "Manage annotations"
-description = "Browse, copy, archive, restore, and delete annotations."
+description = "Browse, edit, copy, archive, restore, and delete annotations."
 contexts = ["global"]
 command = ["../bin/herdr-annotate.exe", "manage"]
 
