@@ -114,6 +114,27 @@ function Install-PlannotatorTui {
   }
 }
 
+# .NET rather than Get-FileHash: in Windows PowerShell 5.1, Get-FileHash is a script function of
+# Microsoft.PowerShell.Utility, not a compiled cmdlet. A powershell.exe started by a process that
+# came from PowerShell 7 inherits a PSModulePath listing PowerShell 7's modules first, loads that
+# Core-only Utility manifest instead, and Get-FileHash does not exist. SHA256 from .NET is the
+# same in 5.1 and 7 whatever the module path says.
+function Get-Sha256Hex {
+  param([Parameter(Mandatory = $true)][string]$LiteralPath)
+
+  $stream = [System.IO.File]::OpenRead($LiteralPath)
+  try {
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+      [System.BitConverter]::ToString($sha256.ComputeHash($stream)).Replace("-", "").ToLowerInvariant()
+    } finally {
+      $sha256.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
+}
+
 if ($hasLocalOverride) {
   if (-not (Test-Path -LiteralPath $localOverride -PathType Leaf)) {
     throw "PLANNOTATOR_TUI_BIN is not a file: $localOverride"
@@ -166,7 +187,7 @@ try {
     }
     $checksumFields = $matches[0].Trim() -split "\s+"
     $expected = $checksumFields[0].ToLowerInvariant()
-    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $downloadedAsset).Hash.ToLowerInvariant()
+    $actual = Get-Sha256Hex -LiteralPath $downloadedAsset
     if ($actual -ne $expected) {
       throw "sha256 mismatch for ${asset}: expected $expected, got $actual"
     }

@@ -109,6 +109,11 @@ DEVELOPMENT_BUILDS = [
         "stage-plannotator-tui.ps1",
     ],
 ]
+# The Windows builds run under powershell.exe 5.1, where Get-FileHash is a script function of
+# Microsoft.PowerShell.Utility. Started from a PowerShell 7 session, 5.1 inherits a PSModulePath
+# that loads PowerShell 7's Core-only Utility manifest instead and Get-FileHash is missing, so the
+# fetchers hash with .NET.
+WINDOWS_FETCHERS = ["scripts/fetch-herdr-annotate.ps1", "scripts/fetch-plannotator-tui.ps1"]
 
 
 def fail(path: Path, message: str) -> None:
@@ -216,6 +221,17 @@ def check_distributed(path: Path, version_path: Path, native_version_path: Path)
             fail(path, f"shell found in actions.{entry_id}: {expected!r}")
 
     check_no_link_capture(path, manifest)
+
+
+def check_windows_fetchers(root: Path) -> None:
+    for relative in WINDOWS_FETCHERS:
+        path = root / relative
+        text = path.read_text(encoding="utf-8")
+        for number, line in enumerate(text.splitlines(), 1):
+            if "Get-FileHash" in line.split("#", 1)[0]:
+                fail(path, f"line {number} calls Get-FileHash, which 5.1 may not have")
+        if "Get-Sha256Hex -LiteralPath" not in text:
+            fail(path, "the download is not checked with Get-Sha256Hex")
 
 
 def check_development(path: Path) -> None:
@@ -411,6 +427,7 @@ def main() -> None:
         root / "windows-full" / "herdr-plugin.toml",
         root / "herdr-plugin.toml",
     )
+    check_windows_fetchers(root)
     lite = root / "lite" / "herdr-plugin.toml"
     check_no_link_capture(lite, load(lite))
     check_links(root / "links" / "herdr-plugin.toml", root / "herdr-plugin.toml")

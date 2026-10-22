@@ -35,6 +35,27 @@ if ($env:HERDR_ANNOTATE_BIN) {
   exit 0
 }
 
+# .NET rather than Get-FileHash: in Windows PowerShell 5.1, Get-FileHash is a script function of
+# Microsoft.PowerShell.Utility, not a compiled cmdlet. A powershell.exe started by a process that
+# came from PowerShell 7 inherits a PSModulePath listing PowerShell 7's modules first, loads that
+# Core-only Utility manifest instead, and Get-FileHash does not exist. SHA256 from .NET is the
+# same in 5.1 and 7 whatever the module path says.
+function Get-Sha256Hex {
+  param([Parameter(Mandatory = $true)][string]$LiteralPath)
+
+  $stream = [System.IO.File]::OpenRead($LiteralPath)
+  try {
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+      [System.BitConverter]::ToString($sha256.ComputeHash($stream)).Replace("-", "").ToLowerInvariant()
+    } finally {
+      $sha256.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
+}
+
 $architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
 $target = switch ($architecture) {
   "X64" { "x86_64-pc-windows-msvc" }
@@ -51,7 +72,7 @@ try {
   $line = Get-Content -LiteralPath (Join-Path $temporary "SHA256SUMS") | Where-Object { $_ -match "\s$([regex]::Escape($asset))$" } | Select-Object -First 1
   if (-not $line) { throw "$asset is not listed in $base/SHA256SUMS" }
   $expected = ($line -split "\s+")[0].ToLowerInvariant()
-  $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $temporary $asset)).Hash.ToLowerInvariant()
+  $actual = Get-Sha256Hex -LiteralPath (Join-Path $temporary $asset)
   if ($actual -ne $expected) { throw "sha256 mismatch for ${asset}: expected $expected, got $actual" }
   Copy-Item -Force -LiteralPath (Join-Path $temporary $asset) -Destination "$destination.tmp"
   Move-Item -Force -LiteralPath "$destination.tmp" -Destination $destination
