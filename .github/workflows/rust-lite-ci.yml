@@ -24,6 +24,34 @@ permissions:
   contents: read
 
 jobs:
+  helper-version:
+    # Installs download the released helper pinned by herdr-annotate.version,
+    # so a rust/ change only reaches users after a version bump and release.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: rust/ changes come with a helper version bump
+        run: |
+          version=$(tr -d '[:space:]' < herdr-annotate.version)
+          tag="rust-lite-v$version"
+          if [ -z "$(git tag -l 'rust-lite-v*')" ]; then
+            echo "::error::no rust-lite-v* tags fetched; cannot compare rust/ with the released helper"
+            exit 1
+          fi
+          if ! git rev-parse -q --verify "refs/tags/$tag" > /dev/null; then
+            echo "$tag is not released yet; treating herdr-annotate.version as bumped"
+            exit 0
+          fi
+          if ! git diff --quiet "$tag" HEAD -- rust/; then
+            git diff --stat "$tag" HEAD -- rust/
+            echo "::error::rust/ differs from $tag but herdr-annotate.version is still $version. Bump the helper version (herdr-annotate.version, rust/Cargo.toml, rust/Cargo.lock) so the change ships in a release."
+            exit 1
+          fi
+          echo "rust/ matches $tag"
+
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
