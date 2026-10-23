@@ -13,6 +13,7 @@ pub struct CopyAndArchiveDependencies<Load, Deliver, Save, Remove, Id, Now> {
     pub load_active: Load,
     pub deliver: Deliver,
     pub save_archive: Save,
+    /// Remove only active records that still match the supplied archive snapshot.
     pub remove_active: Remove,
     pub create_archive_id: Id,
     pub now: Now,
@@ -26,7 +27,7 @@ pub enum CopyAndArchiveOutcome {
     ArchivedActiveRetained { message: String },
 }
 
-/// Deliver the active annotations, persist a recoverable archive, then remove active IDs.
+/// Deliver the active annotations, persist an archive, then remove unchanged active records.
 pub fn copy_and_archive_annotations<Load, Deliver, Save, Remove, Id, Now>(
     dependencies: CopyAndArchiveDependencies<Load, Deliver, Save, Remove, Id, Now>,
 ) -> CopyAndArchiveOutcome
@@ -34,7 +35,7 @@ where
     Load: FnOnce() -> StoreResult<Vec<Annotation>>,
     Deliver: FnOnce(String) -> Result<(), String>,
     Save: FnOnce(ArchivedAnnotationSet) -> StoreResult<()>,
-    Remove: FnOnce(Vec<String>) -> StoreResult<()>,
+    Remove: FnOnce(Vec<Annotation>) -> StoreResult<()>,
     Id: FnOnce() -> String,
     Now: FnOnce() -> String,
 {
@@ -61,16 +62,11 @@ where
     if let Err(message) = (dependencies.save_archive)(archive) {
         return CopyAndArchiveOutcome::StayOpen { message };
     }
-    let ids = active
-        .iter()
-        .map(|annotation| annotation.id.clone())
-        .collect::<Vec<_>>();
-    if let Err(message) = (dependencies.remove_active)(ids) {
+    let archived_count = active.len();
+    if let Err(message) = (dependencies.remove_active)(active) {
         return CopyAndArchiveOutcome::ArchivedActiveRetained { message };
     }
-    CopyAndArchiveOutcome::Close {
-        archived_count: active.len(),
-    }
+    CopyAndArchiveOutcome::Close { archived_count }
 }
 
 /// Dependencies for one restore transition.
@@ -128,7 +124,8 @@ mod tests {
 
     use crate::store::{
         append_annotation, append_archived_set, load_annotations, load_archived_sets,
-        merge_annotations, remove_annotations_by_id, remove_archived_set,
+        merge_annotations, remove_annotations_if_unchanged, remove_archived_set,
+        update_annotation_comment,
     };
     use crate::types::InvocationContext;
 
@@ -188,9 +185,9 @@ mod tests {
                 saved.replace(Some(archive));
                 Ok(())
             },
-            remove_active: |ids: Vec<String>| {
+            remove_active: |items: Vec<Annotation>| {
                 events.borrow_mut().push("remove");
-                ids.clone_into(&mut removed.borrow_mut());
+                items.clone_into(&mut removed.borrow_mut());
                 Ok(())
             },
             create_archive_id: || "archive-one".to_owned(),
@@ -202,7 +199,7 @@ mod tests {
             clipboard.borrow().find("selection one") < clipboard.borrow().find("selection two")
         );
         assert_eq!(saved.borrow().as_ref(), Some(&archive(&["one", "two"])));
-        assert_eq!(*removed.borrow(), ["one", "two"]);
+        assert_eq!(*removed.borrow(), [annotation("one"), annotation("two")]);
     }
 
     #[test]
@@ -334,6 +331,52 @@ mod tests {
     }
 
     #[test]
+    fn archive_keeps_an_annotation_edited_after_the_snapshot() {
+        let dir = temporary_directory();
+        let original = annotation("snapshot");
+        let unchanged = annotation("unchanged");
+        let concurrent = annotation("concurrent");
+        append_annotation(&dir, &original).expect("append");
+        append_annotation(&dir, &unchanged).expect("append unchanged");
+        let outcome = copy_and_archive_annotations(CopyAndArchiveDependencies {
+            load_active: || load_annotations(&dir),
+            deliver: |_| Ok(()),
+            save_archive: |set| {
+                append_archived_set(&dir, &set)?;
+                update_annotation_comment(
+                    &dir,
+                    &original.id,
+                    &original.comment,
+                    "revised comment",
+                )?;
+                append_annotation(&dir, &concurrent)
+            },
+            remove_active: |items: Vec<Annotation>| remove_annotations_if_unchanged(&dir, &items),
+            create_archive_id: || "archive-one".to_owned(),
+            now: || "2026-08-26T23:32:00Z".to_owned(),
+        });
+
+        let mut edited = original;
+        edited.comment = "revised comment".to_owned();
+        assert_eq!(
+            load_annotations(&dir).expect("active edit retained"),
+            [edited, unchanged, concurrent]
+        );
+        assert_eq!(
+            load_archived_sets(&dir).expect("archive snapshot"),
+            [archive(&["snapshot", "unchanged"])]
+        );
+        assert_eq!(
+            outcome,
+            CopyAndArchiveOutcome::ArchivedActiveRetained {
+                message: "Annotations changed while archiving; active annotations were kept."
+                    .to_owned()
+            }
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn real_stores_archive_clear_restore_and_preserve_concurrent_saves() {
         let dir = temporary_directory();
         append_annotation(&dir, &annotation("snapshot")).expect("append");
@@ -344,7 +387,7 @@ mod tests {
                 append_archived_set(&dir, &set)?;
                 append_annotation(&dir, &annotation("concurrent"))
             },
-            remove_active: |ids: Vec<String>| remove_annotations_by_id(&dir, &ids),
+            remove_active: |items: Vec<Annotation>| remove_annotations_if_unchanged(&dir, &items),
             create_archive_id: || "archive-one".to_owned(),
             now: || "2026-08-26T23:32:00Z".to_owned(),
         });

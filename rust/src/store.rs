@@ -1,6 +1,6 @@
 //! Concurrent, byte-compatible JSONL annotation stores.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -125,6 +125,32 @@ struct ContextFirstAnnotation<'a> {
     created_at: &'a str,
 }
 
+/// Replace a comment only if it still matches the value the editor opened with.
+pub fn update_annotation_comment(
+    dir: &Path,
+    annotation_id: &str,
+    expected_comment: &str,
+    comment: &str,
+) -> StoreResult<bool> {
+    with_store_lock(dir, StoreName::Annotations, || {
+        let mut annotations = load_annotations_unlocked(dir)?;
+        let Some(existing) = annotations
+            .iter_mut()
+            .find(|annotation| annotation.id == annotation_id)
+        else {
+            return Ok(false);
+        };
+        if existing.comment != expected_comment {
+            return Err(
+                "Comment changed in another pane. Draft kept; Esc, then r to reload.".to_owned(),
+            );
+        }
+        comment.clone_into(&mut existing.comment);
+        replace_annotations_unlocked(dir, &annotations)?;
+        Ok(true)
+    })
+}
+
 /// Remove selected annotation IDs without racing concurrent annotation saves.
 pub fn remove_annotations_by_id(dir: &Path, annotation_ids: &[String]) -> StoreResult<()> {
     with_store_lock(dir, StoreName::Annotations, || {
@@ -136,6 +162,33 @@ pub fn remove_annotations_by_id(dir: &Path, annotation_ids: &[String]) -> StoreR
         let retained = loaded
             .into_iter()
             .filter(|annotation| !removed.contains(annotation.id.as_str()))
+            .collect::<Vec<_>>();
+        replace_annotations_unlocked(dir, &retained)
+    })
+}
+
+/// Remove an archived snapshot only if its active records have not changed.
+///
+/// Check and remove under the same lock so a saved edit cannot be deleted by an older snapshot.
+pub fn remove_annotations_if_unchanged(dir: &Path, annotations: &[Annotation]) -> StoreResult<()> {
+    with_store_lock(dir, StoreName::Annotations, || {
+        let loaded = load_annotations_unlocked(dir)?;
+        let snapshot = annotations
+            .iter()
+            .map(|annotation| (annotation.id.as_str(), annotation))
+            .collect::<HashMap<_, _>>();
+        if loaded.iter().any(|annotation| {
+            snapshot
+                .get(annotation.id.as_str())
+                .is_some_and(|saved| annotation != *saved)
+        }) {
+            return Err(
+                "Annotations changed while archiving; active annotations were kept.".to_owned(),
+            );
+        }
+        let retained = loaded
+            .into_iter()
+            .filter(|annotation| !snapshot.contains_key(annotation.id.as_str()))
             .collect::<Vec<_>>();
         replace_annotations_unlocked(dir, &retained)
     })
@@ -521,6 +574,28 @@ mod tests {
         assert_eq!(
             load_annotations(&dir).expect("load"),
             [annotation("two"), annotation("three")]
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn annotation_update_replaces_only_the_matching_record() {
+        let dir = temporary_directory();
+        let original = annotation("one");
+        let other = annotation("two");
+        append_annotation(&dir, &original).expect("append original");
+        append_annotation(&dir, &other).expect("append other");
+        let mut updated = original.clone();
+        updated.comment = "revised comment".to_owned();
+
+        assert!(
+            update_annotation_comment(&dir, "one", &original.comment, &updated.comment)
+                .expect("update")
+        );
+        assert_eq!(load_annotations(&dir).expect("load"), [updated, other]);
+        assert!(
+            !update_annotation_comment(&dir, "missing", "original", "comment")
+                .expect("missing update")
         );
         let _ = fs::remove_dir_all(dir);
     }

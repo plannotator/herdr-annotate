@@ -1261,6 +1261,7 @@ MANAGER_REQUIRED = {
     for view in ("active", "archives")
     for key in ("j", "k", "y", "c", "C", "d", "D", "r", "u", "Tab", "Esc", "q", "Ctrl-C")
 }
+MANAGER_REQUIRED.add("manager:active:e")
 
 
 def editor_seed(state: Path) -> None:
@@ -1506,6 +1507,21 @@ def run_screen_and_store_layer(harness: Harness) -> Path:
         manager_seed,
         compare_state=True,
         compare_clipboard=True,
+    )
+    harness.pty_case(
+        "store.manager.edit-save",
+        "manager",
+        [
+            Step("edit", b"e", ("manager:active:e",)),
+            Step("append", b"!"),
+            Step("save", b"\x13"),
+            Step("quit", b"q", ("manager:active:q",), exits=True),
+        ],
+        "Annotations (",
+        28,
+        98,
+        manager_seed,
+        compare_state=True,
     )
     harness.pty_case(
         "screen.manager.escape-exit",

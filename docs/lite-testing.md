@@ -66,6 +66,9 @@ Deliberate re-records so far:
   manager header reads `oldest first`, and the copied Markdown follows Plannotator's feedback
   format (`# Annotations on terminal selections`, `## Annotation N (workspace / tab)`,
   `Comment on:`, `>` comment). The store bytes and `bun-editor-annotations.jsonl` are unchanged.
+- The manager's active view offers `e` to edit the selected comment. `Ctrl+S` saves without changing
+  the annotation's selected text or provenance; `Esc` cancels. If another manager saves a different
+  comment first, a stale save is rejected without closing the draft or overwriting the newer comment.
 
 ## Everything else
 
