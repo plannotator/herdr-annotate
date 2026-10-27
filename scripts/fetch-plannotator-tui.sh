@@ -44,7 +44,10 @@ fi
 case "$(uname -s)/$(uname -m)" in
   Darwin/arm64)            target=aarch64-apple-darwin ;;
   Darwin/x86_64)           target=x86_64-apple-darwin ;;
-  Linux/x86_64)            target=x86_64-unknown-linux-gnu ;;
+  Linux/x86_64)
+    # Alpine and other musl systems can't run the glibc build; the static musl build runs there.
+    if [ -e /lib/ld-musl-x86_64.so.1 ]; then target=x86_64-unknown-linux-musl
+    else target=x86_64-unknown-linux-gnu; fi ;;
   Linux/aarch64|Linux/arm64) target=aarch64-unknown-linux-gnu ;;
   *) echo "warning: no plannotator-tui build for $(uname -s)/$(uname -m); the review pane is unavailable" >&2; exit 0 ;;
 esac
