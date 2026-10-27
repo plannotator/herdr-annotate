@@ -13,6 +13,7 @@ pub mod manager;
 pub mod manager_copy;
 pub mod pane_clipboard;
 pub mod paths;
+pub mod source_jump;
 pub mod store;
 pub mod types;
 pub mod width;

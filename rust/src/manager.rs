@@ -19,9 +19,11 @@ use crate::archive_workflow::{
 use crate::clipboard::write_clipboard;
 use crate::editor::{EditorApp, now_iso_for_manager};
 use crate::format::{sanitize_terminal_text, wrap_text};
+use crate::herdr::run_herdr_output;
 use crate::manager_copy::{ManagerCopyOutcome, copy_annotations};
 use crate::pane_clipboard::{emit_to_terminal, write_pane_clipboard};
 use crate::paths::state_dir;
+use crate::source_jump::{JumpOutcome, jump_to_source};
 use crate::store::{
     append_archived_set, capture_order_annotations, load_annotations, load_archived_sets,
     merge_annotations, newest_first_archived_sets, remove_annotations_by_id,
@@ -56,8 +58,12 @@ pub struct ManagerApp {
     status: String,
     confirmation: Confirmation,
     editing: Option<EditorApp>,
+    herdr: HerdrCall,
     quit: bool,
 }
+
+/// Run one Herdr CLI command, returning stdout or stderr; replaced by a fake in tests.
+type HerdrCall = fn(&[String]) -> Result<String, String>;
 
 impl ManagerApp {
     /// Load both stores and start in the active-annotation view.
@@ -72,6 +78,7 @@ impl ManagerApp {
             status: String::new(),
             confirmation: Confirmation::None,
             editing: None,
+            herdr: run_herdr_output,
             quit: false,
         };
         app.reload_active();
@@ -427,7 +434,7 @@ impl ManagerApp {
         }
         match self.view {
             ManagerView::Active => {
-                "j/k · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q"
+                "j/k · ↵ jump · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q"
                     .to_owned()
             }
             ManagerView::Archives => {
@@ -493,6 +500,7 @@ impl ManagerApp {
             }
             KeyCode::Char('C') => self.copy_and_archive(),
             KeyCode::Char('e') => self.edit_selected_annotation(),
+            KeyCode::Enter => self.jump_to_selected_source(),
             KeyCode::Char('y') => {
                 let items = self
                     .annotations
@@ -585,6 +593,21 @@ impl ManagerApp {
         let annotation = annotation.clone();
         self.active_selected = index;
         self.editing = Some(EditorApp::edit(annotation));
+    }
+
+    /// Focus the Herdr pane the selected annotation came from, closing the manager on success.
+    fn jump_to_selected_source(&mut self) {
+        let Some(context) = self
+            .annotations
+            .get(self.active_selected)
+            .map(|item| item.context.clone())
+        else {
+            return;
+        };
+        match jump_to_source(&context, self.herdr) {
+            JumpOutcome::Focused => self.quit = true,
+            JumpOutcome::Unavailable(message) => self.status = message,
+        }
     }
 
     fn handle_edit_key(&mut self, key: KeyEvent) {
@@ -882,6 +905,7 @@ mod tests {
         assert!(frame.iter().any(|row| row.contains("oldest first")));
         assert!(frame.iter().any(|row| row.contains("comment one")));
         assert!(frame.iter().any(|row| row.contains("e edit")));
+        assert!(frame.iter().any(|row| row.contains("↵ jump")));
         assert!(frame.iter().any(|row| row.contains("C copy+archive")));
         let _ = fs::remove_dir_all(dir);
     }
@@ -1175,6 +1199,124 @@ mod tests {
             load_annotations(&dir).expect("empty store"),
             Vec::<Annotation>::new()
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    static HERDR_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+    fn herdr_must_not_run(_: &[String]) -> Result<String, String> {
+        HERDR_CALLS.fetch_add(1, Ordering::Relaxed);
+        Err("unexpected herdr call".to_owned())
+    }
+
+    fn herdr_without_the_pane(args: &[String]) -> Result<String, String> {
+        match args.first().map(String::as_str) {
+            Some("agent") => Err(
+                r#"{"error":{"code":"agent_not_found","message":"agent target w1:p9 not found"}}"#
+                    .to_owned(),
+            ),
+            Some("pane") => Err(
+                r#"{"error":{"code":"pane_not_found","message":"pane w1:p9 not found"}}"#
+                    .to_owned(),
+            ),
+            _ => Err(format!("unexpected herdr call: {args:?}")),
+        }
+    }
+
+    fn herdr_focuses(args: &[String]) -> Result<String, String> {
+        if args == ["agent", "focus", "w1:p2"] {
+            Ok("{}".to_owned())
+        } else {
+            Err(format!("unexpected herdr call: {args:?}"))
+        }
+    }
+
+    fn annotation_from_pane(id: &str, pane: &str) -> Annotation {
+        let mut item = annotation(id);
+        item.context.focused_pane_id = Some(pane.to_owned());
+        item
+    }
+
+    #[test]
+    fn jump_without_a_source_pane_id_reports_it_and_stays_open() {
+        let dir = directory();
+        let original = annotation("one");
+        append_annotation(&dir, &original).expect("annotation");
+        let mut app = ManagerApp::load(dir.clone());
+        app.herdr = herdr_must_not_run;
+
+        let calls = HERDR_CALLS.load(Ordering::Relaxed);
+
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+
+        assert!(!app.quit);
+        assert_eq!(HERDR_CALLS.load(Ordering::Relaxed), calls);
+        let frame = rows(&app);
+        assert!(
+            frame
+                .iter()
+                .any(|row| row.contains("This annotation has no source pane to jump to."))
+        );
+        assert!(frame.iter().any(|row| row.contains("Annotations (1)")));
+        assert_eq!(load_annotations(&dir).expect("unchanged"), [original]);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn jump_to_a_closed_source_pane_reports_it_and_stays_open() {
+        let dir = directory();
+        let original = annotation_from_pane("one", "w1:p9");
+        append_annotation(&dir, &original).expect("annotation");
+        let mut app = ManagerApp::load(dir.clone());
+        app.herdr = herdr_without_the_pane;
+
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+
+        assert!(!app.quit);
+        let frame = rows(&app);
+        assert!(
+            frame
+                .iter()
+                .any(|row| row.contains("The source pane no longer exists."))
+        );
+        assert_eq!(load_annotations(&dir).expect("unchanged"), [original]);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn jump_to_the_source_pane_closes_the_manager() {
+        let dir = directory();
+        append_annotation(&dir, &annotation_from_pane("one", "w1:p2")).expect("annotation");
+        let mut app = ManagerApp::load(dir.clone());
+        app.herdr = herdr_focuses;
+
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+
+        assert!(app.quit);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn jump_is_ignored_without_an_active_selection() {
+        let dir = directory();
+        let mut app = ManagerApp::load(dir.clone());
+        app.herdr = herdr_must_not_run;
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+        assert!(!app.quit);
+        append_archived_set(
+            &dir,
+            &ArchivedAnnotationSet {
+                version: 1,
+                id: "archive-one".to_owned(),
+                archived_at: "2026-08-26T23:32:00Z".to_owned(),
+                annotations: vec![annotation_from_pane("one", "w1:p2")],
+            },
+        )
+        .expect("archive");
+        app.handle_key(KeyEvent::from(KeyCode::Tab));
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+        assert!(!app.quit);
+        assert!(rows(&app).iter().any(|row| row.contains("Archives (1)")));
         let _ = fs::remove_dir_all(dir);
     }
 

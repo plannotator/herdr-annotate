@@ -186,12 +186,17 @@ herdr server reload-config
 | `Ctrl+B Ctrl+A` | copy all annotations as Markdown, then archive them |
 | `Ctrl+B Ctrl+V` | paste all annotations into the focused agent's prompt without sending, then archive them |
 | `Ctrl+B Ctrl+S` | send all annotations as the focused agent's next message, then archive them |
-| `Ctrl+B M` | manage · `e` edit the selected comment · `y` copy one · `c` copy all · `Shift+C` copy and archive · `Tab` archives (`y` copy · `u` restore · `d d` delete) |
+| `Ctrl+B M` | manage · `Enter` jump to the pane it came from · `e` edit the selected comment · `y` copy one · `c` copy all · `Shift+C` copy and archive · `Tab` archives (`y` copy · `u` restore · `d d` delete) |
 
 In the manager's active view, `e` opens the selected comment in the editor. `Ctrl+S` saves it;
 `Esc` cancels. Editing leaves the selected text, capture metadata, and original ordering unchanged.
 If another pane saves that comment first, saving your stale draft is rejected and the draft stays
 open. To edit the latest version, cancel with `Esc`, then press `r` in the manager to reload.
+
+`Enter` focuses the Herdr pane the selected annotation was captured from and closes the manager.
+Agent panes are focused directly; for any other pane, Herdr focuses the tab that holds it. If the
+pane has closed, or the annotation has no pane recorded, the manager says so and stays open. Herdr
+cannot scroll a pane to the annotated text, so the jump stops at the pane.
 
 Annotations are listed and handed off oldest first, in the order you wrote them, so the agent
 reads your feedback in the same order you went through the text. The Markdown uses Plannotator's
