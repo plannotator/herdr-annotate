@@ -42,7 +42,7 @@
     "                                   │                                                              ",
     "                                   │ api 한· / server · 8/9/2026, 10:11:13 AM                      ",
     "                                   │                                                              ",
-    " j/k · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q           "
+    " j/k · ↵ jump · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q  "
   ],
   "screen.manager.all-views.screen.active-arrow-up": [
     " Annotations (3)  oldest first                                                                    ",
@@ -72,7 +72,7 @@
     "                                   │                                                              ",
     "                                   │ api 한· / server · 8/8/2026, 12:00:01 AM                      ",
     "                                   │                                                              ",
-    " j/k · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q           "
+    " j/k · ↵ jump · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q  "
   ],
   "screen.manager.all-views.screen.active-clear": [
     " Annotations (0)  oldest first                                                                    ",
@@ -132,7 +132,7 @@
     "                                   │                                                              ",
     "                                   │ api 한· / server · 8/9/2026, 10:11:13 AM                      ",
     "                                   │                                                              ",
-    " j/k · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q           "
+    " j/k · ↵ jump · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q  "
   ],
   "screen.manager.all-views.screen.active-clear-confirm": [
     " Annotations (2)  oldest first                                                                    ",
@@ -252,7 +252,7 @@
     "                                   │                                                              ",
     "                                   │ api 한· / server · 8/9/2026, 10:11:13 AM                      ",
     "                                   │                                                              ",
-    " j/k · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q           "
+    " j/k · ↵ jump · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q  "
   ],
   "screen.manager.all-views.screen.active-k": [
     " Annotations (3)  oldest first                                                                    ",
@@ -282,7 +282,7 @@
     "                                   │                                                              ",
     "                                   │ api 한· / server · 8/8/2026, 12:00:01 AM                      ",
     "                                   │                                                              ",
-    " j/k · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q           "
+    " j/k · ↵ jump · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q  "
   ],
   "screen.manager.all-views.screen.active-quit": [
     "                                                                                                  ",
@@ -402,7 +402,7 @@
     "                                   │                                                              ",
     "                                   │                                                              ",
     "                                   │                                                              ",
-    " j/k · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q           "
+    " j/k · ↵ jump · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q  "
   ],
   "screen.manager.all-views.screen.archives-C-ignored": [
     " Archives (2)  newest first                                                                       ",
@@ -822,7 +822,7 @@
     "                                   │                                                              ",
     "                                   │ api 한· / server · 8/9/2026, 10:11:13 AM                      ",
     "                                   │                                                              ",
-    " j/k · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q           "
+    " j/k · ↵ jump · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q  "
   ],
   "screen.manager.all-views.screen.initial": [
     " Annotations (3)  oldest first                                                                    ",
@@ -852,7 +852,7 @@
     "                                   │                                                              ",
     "                                   │ api 한· / server · 8/8/2026, 12:00:01 AM                      ",
     "                                   │                                                              ",
-    " j/k · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q           "
+    " j/k · ↵ jump · e edit · y copy · c all · C copy+archive · d delete · D clear · Tab archives · q  "
   ],
   "screen.manager.all-views.state": [
     "[",

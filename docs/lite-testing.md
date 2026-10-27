@@ -69,6 +69,8 @@ Deliberate re-records so far:
 - The manager's active view offers `e` to edit the selected comment. `Ctrl+S` saves without changing
   the annotation's selected text or provenance; `Esc` cancels. If another manager saves a different
   comment first, a stale save is rejected without closing the draft or overwriting the newer comment.
+- The active view's footer adds `↵ jump`: `Enter` focuses the pane an annotation came from. No other
+  screen line changes.
 
 ## Everything else
 
