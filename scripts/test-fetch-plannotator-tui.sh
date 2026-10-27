@@ -58,7 +58,7 @@ curl_log="$test_root/curl.log"
 sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | awk '{print $1}'; }
 publish() {
   : > "$release_root/SHA256SUMS"
-  for target in aarch64-apple-darwin x86_64-apple-darwin x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
+  for target in aarch64-apple-darwin x86_64-apple-darwin x86_64-unknown-linux-gnu x86_64-unknown-linux-musl aarch64-unknown-linux-gnu; do
     cp "$1" "$release_root/plannotator-tui-$target"
     printf '%s  %s\n' "$(sha256 "$1")" "plannotator-tui-$target" >> "$release_root/SHA256SUMS"
   done
