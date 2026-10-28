@@ -183,8 +183,8 @@ def check_distributed(path: Path, version_path: Path, native_version_path: Path)
     manifest = load(path)
     check_top_level_windows(path, manifest)
     check_native_lite(path, manifest)
-    if version_path.read_text(encoding="utf-8").strip() != "0.9.5":
-        fail(version_path, "plannotator-tui.version is not 0.9.5")
+    if version_path.read_text(encoding="utf-8").strip() != "0.9.6":
+        fail(version_path, "plannotator-tui.version is not 0.9.6")
     if native_version_path.read_text(encoding="utf-8").strip() != "0.2.3":
         fail(native_version_path, "herdr-annotate.version is not 0.2.3")
 

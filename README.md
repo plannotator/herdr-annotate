@@ -215,7 +215,7 @@ an approval or question prompt, they refuse, type nothing, and leave your annota
 
 ### Review documents and agent replies
 
-Full install. Works with Claude Code, Codex, pi, Copilot CLI, Droid, Oh My Pi, Hermes CLI and OpenCode (1 and 2).
+Full install. Works with Claude Code, Codex, pi, Copilot CLI, Droid, Oh My Pi, Hermes CLI, OpenCode (1 and 2), Command Code and Antigravity CLI.
 
 | Key | Opens |
 |---|---|
