@@ -21,7 +21,7 @@
 
 id = "annotate"
 name = "Annotate"
-version = "0.9.7"
+version = "0.9.8"
 min_herdr_version = "0.9.0"
 description = "Comment on terminal selections and copy annotations as agent context."
 platforms = ["windows"]
@@ -112,6 +112,14 @@ title = "Annotate: open here"
 description = "Review the focused pane's folder in plannotator-tui and send feedback to its agent."
 contexts = ["workspace", "pane"]
 command = ["./bin/plannotator-tui.exe", "herdr", "open"]
+
+# No default key; bind one in Herdr's config (see the README).
+[[actions]]
+id = "gate"
+title = "Annotate: open here for approval"
+description = "Review the focused pane's folder in plannotator-tui with an Approve button, and send the decision to its agent."
+contexts = ["workspace", "pane"]
+command = ["./bin/plannotator-tui.exe", "herdr", "open", "--gate"]
 
 [[actions]]
 id = "last"
