@@ -122,7 +122,7 @@ try {
     # variant installed and the review half silently unreachable, which is the state this
     # whole variant exists to end.
     $actionIds = @($plugin.actions | ForEach-Object { $_.id })
-    foreach ($id in @("capture", "copy-context", "copy-archive", "paste-archive", "send-archive", "manage", "open", "last", "last-newest", "terminal")) {
+    foreach ($id in @("capture", "copy-context", "copy-archive", "paste-archive", "send-archive", "manage", "open", "gate", "last", "last-newest", "terminal")) {
       Assert-True ($actionIds -contains $id) "Herdr $version omitted action $id"
       $action = @($plugin.actions | Where-Object { $_.id -ceq $id })
       # @() at the call site: an empty array returned from a function unrolls to $null.
@@ -130,7 +130,7 @@ try {
       Assert-True ($platforms.Count -eq 0 -or $platforms -contains "windows") `
         "action $id is not effective on Windows: $($platforms -join ',')"
     }
-    Assert-True ($actionIds.Count -eq 10) "Herdr $version listed $($actionIds.Count) actions, expected 10"
+    Assert-True ($actionIds.Count -eq 11) "Herdr $version listed $($actionIds.Count) actions, expected 11"
 
     $paneIds = @($plugin.panes | ForEach-Object { $_.id })
     foreach ($id in @("editor", "manager", "doc")) {
@@ -159,7 +159,7 @@ try {
     $handlers = @(if ($null -ne $handlerProperty -and $null -ne $handlerProperty.Value) { $handlerProperty.Value })
     Assert-True ($handlers.Count -eq 0) "Herdr $version listed $($handlers.Count) link handlers, expected none"
 
-    Write-Output "herdr $version accepts windows-full: 10 actions, 3 panes, direct-argv doc pane"
+    Write-Output "herdr $version accepts windows-full: 11 actions, 3 panes, direct-argv doc pane"
   }
 } finally {
   foreach ($name in $isolatedNames) {

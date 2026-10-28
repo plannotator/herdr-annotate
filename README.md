@@ -235,6 +235,19 @@ command = "annotate.terminal"
 description = "review this pane's recent output"
 ```
 
+`annotate.gate` opens the same folder review as `annotate.open`, with an **Approve** button
+(`A`). The agent gets `The user approved.` (with any notes as non-blocking guidance), or your
+numbered feedback as usual. Use it when an agent should wait for your sign-off. It has no
+default key either:
+
+```toml
+[[keys.command]]
+key = "prefix+ctrl+d"
+type = "plugin_action"
+command = "annotate.gate"
+description = "review documents here, with Approve"
+```
+
 #### Ctrl-click Markdown links (opt-in)
 
 Annotate does not capture Ctrl-click on links by default, so `file://…md` links open the way

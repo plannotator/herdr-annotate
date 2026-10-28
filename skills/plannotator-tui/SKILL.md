@@ -27,6 +27,16 @@ file is and ask them to review it.
 
    Address every item, then continue.
 
+   When you need an explicit sign-off before you act, open it with `--gate`:
+
+   ```bash
+   plannotator-tui herdr open docs/plans/auth.md --gate
+   ```
+
+   The human can then approve. An approval arrives as `The user approved.`, or as a message
+   headed `# Approved with Notes` whose notes are guidance, not a request to revise. Numbered
+   feedback still means revise; no message means they closed it without deciding.
+
 When you list files you want the human to open, you may print them as `file://` hyperlinks
 (OSC 8):
 
@@ -44,3 +54,5 @@ herdr plugin pane open --plugin annotate --entrypoint doc --placement split \
   --direction right --target-pane "$HERDR_PANE_ID" --focus --cwd "$PWD" \
   --env PLANNOTATOR_TUI_FILE="$PWD/docs/plans/auth.md" --env PLANNOTATOR_TUI_DELIVER_TO="$HERDR_PANE_ID"
 ```
+
+For a gated review, add `--env PLANNOTATOR_TUI_GATE=1`.
