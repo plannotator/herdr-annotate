@@ -60,7 +60,7 @@ It stages `plannotator-tui` natively, so no launcher sits between Herdr and the 
 
 This is a preview. The pane and path handling were verified on Windows 11 x86_64 ([PR #49](https://github.com/plannotator/herdr-annotate/pull/49), [issue #43](https://github.com/plannotator/herdr-annotate/issues/43)). Native ARM64 is untested. Report results on [issue #43](https://github.com/plannotator/herdr-annotate/issues/43).
 
-> **Required.** Bind the keys in Herdr's config.
+> **Required.** Bind the keys in Herdr's config. These keys are free in Herdr's defaults; if you changed yours, check for clashes with `herdr --default-config` and your own config.
 
 <details open>
 <summary><b>Full install keys:</b> terminal annotations + document and agent-reply review</summary>
@@ -105,7 +105,7 @@ description = "manage annotations"
 
 # Document review (plannotator-tui)
 [[keys.command]]
-key = "prefix+o"
+key = "prefix+d"
 type = "plugin_action"
 command = "annotate.open"
 description = "review documents in this folder"
