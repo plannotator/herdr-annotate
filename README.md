@@ -300,6 +300,10 @@ What works today:
    copy_on_select = false   # the selection stays; copy explicitly with Ctrl+C
    ```
 
+   plannotator-tui has the same setting in its own config
+   (`~/.config/plannotator-tui/config.toml`, `[ui] copy_on_select = false`); press `y` on a
+   selection there to copy it.
+
 2. Trigger the action **without a keypress in Herdr**, while the selection is still
    highlighted. From your laptop, bound to any key in your terminal or OS:
 
