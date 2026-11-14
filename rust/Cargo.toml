@@ -1,6 +1,6 @@
 [package]
 name = "herdr-annotate"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2024"
 rust-version = "1.96"
 license = "MIT"
@@ -20,8 +20,11 @@ serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "1", features = ["process"] }
+rustix = { version = "1", features = ["event", "process", "stdio", "termios"] }
 signal-hook = "0.3"
+
+[target.'cfg(unix)'.dev-dependencies]
+rustix = { version = "1", features = ["pty"] }
 
 [lints.rust]
 unsafe_code = "forbid"
