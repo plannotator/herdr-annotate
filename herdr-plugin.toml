@@ -1,6 +1,6 @@
 id = "annotate"
 name = "Annotate"
-version = "0.9.10"
+version = "0.10.0"
 min_herdr_version = "0.8.0"
 description = "Comment on terminal selections and copy annotations as agent context."
 platforms = ["linux", "macos", "windows"]
@@ -141,3 +141,12 @@ description = "Review the focused pane's recent terminal output in plannotator-t
 contexts = ["pane"]
 platforms = ["macos", "linux"]
 command = ["./bin/plannotator-tui.exe", "herdr", "terminal"]
+
+# No default key; bind one in Herdr's config (see the README). Code review is macOS and Linux only.
+[[actions]]
+id = "review"
+title = "Annotate: review changes"
+description = "Review the focused pane's uncommitted git changes in plannotator-tui and send comments to its agent."
+contexts = ["workspace", "pane"]
+platforms = ["macos", "linux"]
+command = ["./bin/plannotator-tui.exe", "herdr", "review"]
