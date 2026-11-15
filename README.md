@@ -237,7 +237,7 @@ description = "review this pane's recent output"
 
 `annotate.review` opens a code review of the focused pane's git changes. Comment on lines of
 the diff, then send the comments to the agent in that pane. A folder with no repository or no
-changes shows an error instead. It has no default key:
+changes shows an error instead. It works on macOS and Linux, and has no default key:
 
 ```toml
 [[keys.command]]

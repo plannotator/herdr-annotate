@@ -320,6 +320,10 @@ def check_links(path: Path, root_path: Path) -> None:
         fail(path, f"handlers cover {covered!r}, not every platform")
 
 
+# Root actions left out of Windows Full: plannotator-tui's code review is macOS and Linux only.
+UNIX_ONLY_ACTIONS = {"review"}
+
+
 def surface(path: Path, manifest: dict[str, object], table: str) -> set[tuple[object, ...]]:
     """Ids, titles, descriptions and contexts, so parity is compared rather than assumed."""
     entries = manifest.get(table, [])
@@ -367,8 +371,10 @@ def check_windows_full(path: Path, root_path: Path) -> None:
         if not script.is_file():
             fail(path, f"build script {target!r} does not exist at {script}")
 
-    # Parity is the point of the variant: the same surface, reached a different way.
-    if surface(path, manifest, "actions") != surface(root_path, root, "actions"):
+    # Parity is the point of the variant: the same surface, reached a different way. The
+    # one exception is an action plannotator-tui can't run on Windows yet.
+    root_actions = {a for a in surface(root_path, root, "actions") if a[0] not in UNIX_ONLY_ACTIONS}
+    if surface(path, manifest, "actions") != root_actions:
         fail(path, "action ids, titles, descriptions or contexts differ from the root manifest")
 
     for table in ("actions", "panes", "link_handlers"):
