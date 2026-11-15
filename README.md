@@ -235,6 +235,18 @@ command = "annotate.terminal"
 description = "review this pane's recent output"
 ```
 
+`annotate.review` opens a code review of the focused pane's git changes. Comment on lines of
+the diff, then send the comments to the agent in that pane. A folder with no repository or no
+changes shows an error instead. It works on macOS and Linux, and has no default key:
+
+```toml
+[[keys.command]]
+key = "prefix+ctrl+r"
+type = "plugin_action"
+command = "annotate.review"
+description = "review this repo's changes"
+```
+
 `annotate.gate` opens the same folder review as `annotate.open`, with an **Approve** button
 (`A`). The agent gets `The user approved.` (with any notes as non-blocking guidance), or your
 numbered feedback as usual. Use it when an agent should wait for your sign-off. It has no
