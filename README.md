@@ -296,48 +296,35 @@ sends and closes in one key; `E` and `q` are unchanged.
 
 ### Remote sessions
 
-Over SSH or `herdr --remote`, the plugin runs on the **server**, and two things get in the way:
-Herdr's default copy-on-select clears the selection on mouse-up, and the prefix keypress
-clears whatever selection remains before a bound action runs
-([herdrdev/herdr#3380](https://github.com/herdrdev/herdr/issues/3380)). A headless server also
-has no clipboard for the plugin to fall back to.
+Over SSH or `herdr --remote`, the plugin runs on the **server**. It gets the text only when
+Herdr passes the selection to the action, because a headless server has no clipboard to fall
+back to. On Herdr 0.9.5:
 
-What works today:
+| Selection | `prefix+a` | `herdr plugin action invoke annotate.capture` |
+|---|---|---|
+| Copy mode (`prefix+[`, `v`, move) | Works | No text |
+| Mouse drag | No text: the prefix keypress clears the selection ([herdrdev/herdr#3380](https://github.com/herdrdev/herdr/issues/3380)) | No text |
 
-1. On the server, keep the selection after mouse-up:
+So on a remote server:
 
-   ```toml
-   # remote server: ~/.config/herdr/config.toml
-   [ui]
-   copy_on_select = false   # the selection stays; copy explicitly with Ctrl+C
-   ```
+1. Select in copy mode: `prefix+[`, move to the start, `v`, move to the end, then `prefix+a`.
+   The comment dialog opens with the selection. You do not need to leave copy mode first.
 
-   plannotator-tui has the same setting in its own config
-   (`~/.config/plannotator-tui/config.toml`, `[ui] copy_on_select = false`); press `y` on a
-   selection there to copy it.
+2. In Neovim, use the [mapping below](#neovim-integration). It puts the selection in the
+   request it sends to Herdr, so no clipboard or file is involved.
 
-2. Trigger the action **without a keypress in Herdr**, while the selection is still
-   highlighted. From your laptop, bound to any key in your terminal or OS:
-
-   ```sh
-   ssh <host> herdr plugin action invoke annotate.capture
-   # named session on the server: ssh <host> HERDR_SESSION=<name> herdr plugin action invoke annotate.capture
-   ```
-
-   The action reads the focused pane's selection through Herdr's API, which never touches the
-   keyboard path, so the text arrives. Verified: the same selection gives `selected_text` this
-   way and nothing through `prefix+a`.
-
-3. In Neovim, use the mapping below; it hands the selection over in a file.
+Since Herdr 0.9.0 the selection is held by the attached client, not the server, so
+`herdr plugin action invoke` from a shell or from `ssh <host>` no longer sees it. The old
+`ssh <host> herdr plugin action invoke annotate.capture` workaround only works on Herdr 0.8.2
+and earlier.
 
 Server-side key bindings and `herdr --remote <host> --remote-keybindings server` are still
-needed for the manager (`prefix+m`) and other plugin keys; without the flag, `herdr --remote`
-uses your local keys and drops plugin bindings. `prefix+a` itself will work once
-herdrdev/herdr#3380 is fixed.
+needed for `prefix+a`, the manager (`prefix+m`), and other plugin keys; without the flag,
+`herdr --remote` uses your local keys and drops plugin bindings.
 
 ## Selection limits
 
-Herdr Annotate reads text that Herdr copies to the system clipboard. The plugin cannot read selection state from Neovim or another terminal application.
+Herdr Annotate uses the selection that Herdr passes to the action. When Herdr passes none, it reads the system clipboard. The plugin cannot read selection state from Neovim or another terminal application by itself; the [Neovim mapping](#neovim-integration) sends the selection for it.
 
 ## Development
 
@@ -371,18 +358,45 @@ Add this visual-mode mapping to `~/.config/nvim/lua/config/keymaps.lua` for Lazy
 
 ```lua
 vim.keymap.set("x", "<leader>a", function()
-  -- Hand the selection to the plugin through a file: works on headless servers too.
+  -- Send the selection with the request to Herdr: no clipboard, so headless servers work too.
   vim.cmd('normal! "zy')
-  local base = os.getenv("XDG_RUNTIME_DIR")
-  if not base or base == "" then base = vim.fn.fnamemodify(vim.fn.tempname(), ":h") end
-  local dir = base .. "/herdr-annotate-" .. vim.loop.getuid()
-  vim.fn.mkdir(dir, "p", "0700")
-  vim.fn.writefile(vim.split(vim.fn.getreg("z"), "\n"), dir .. "/selection")
-  vim.fn.jobstart({ "herdr", "plugin", "action", "invoke", "annotate.capture" })
+  local socket = os.getenv("HERDR_SOCKET_PATH")
+  if not socket or socket == "" then
+    return vim.notify("Herdr Annotate: run Neovim inside a Herdr pane", vim.log.levels.WARN)
+  end
+  local reply, done = "", false
+  local ok, channel = pcall(vim.fn.sockconnect, "pipe", socket, {
+    on_data = function(id, data)
+      reply = reply .. table.concat(data, "\n")
+      if done or (#data == 1 and data[1] ~= "") then return end -- wait for the whole line
+      done = true
+      vim.schedule(function()
+        pcall(vim.fn.chanclose, id)
+        local decoded, response = pcall(vim.json.decode, (reply:gsub("\n.*", "")))
+        if decoded and type(response) == "table" and response.error then
+          vim.notify("Herdr Annotate: " .. tostring(response.error.message), vim.log.levels.ERROR)
+        end
+      end)
+    end,
+  })
+  if not ok or channel == 0 then
+    return vim.notify("Herdr Annotate: cannot reach Herdr at " .. socket, vim.log.levels.ERROR)
+  end
+  vim.fn.chansend(channel, vim.json.encode({
+    id = "nvim-annotate",
+    method = "plugin.action.invoke",
+    params = { action_id = "annotate.capture", context = { selected_text = vim.fn.getreg("z") } },
+  }) .. "\n")
 end, { desc = "Annotate in Herdr" })
 ```
 
 Select text with the mouse or Visual mode. Then press `<leader>a` to open Herdr Annotate.
-The file is read once and removed; a file older than 15 seconds is ignored.
+The mapping sends the selection as `selected_text` in a `plugin.action.invoke` request on
+Herdr's socket (`$HERDR_SOCKET_PATH`), so it works the same on a headless server.
+
+The earlier mapping wrote the selection to `$XDG_RUNTIME_DIR/herdr-annotate-<uid>/selection` and
+ran `herdr plugin action invoke`. The plugin still reads that file, but when `XDG_RUNTIME_DIR` is
+not set, the old mapping writes to Neovim's own temporary folder and the plugin never sees the file.
+Replace it with the mapping above.
 
 LazyVim uses `Space` as `<leader>` by default. The mapping keeps mouse support and leaves normal Neovim commands unchanged.
