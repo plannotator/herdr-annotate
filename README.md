@@ -252,6 +252,10 @@ back. `o` shows the whole file as it is now and `O` as it was before the change;
 to the diff. `x` marks a file viewed, and the file list ticks it. `z` hides or shows the notes,
 here and in document reviews.
 
+Drag over lines with the mouse to select them, then `c` comments and `s` suggests code. `/`
+filters the files by name, `t` by kind (code, tests, docs and so on) and `H` hides viewed
+files. Drag the lines between the panes to resize them.
+
 To review a GitHub pull request, run `plannotator-tui herdr review 123` (or the pull request's
 link) from a pane in the repository. It needs plannotator-tui on your `PATH` and a `gh` login,
 and it posts nothing to GitHub.
@@ -308,7 +312,7 @@ Scripts and agents can leave a note without opening a pane:
 `plannotator-tui --annotate-block <file.md> <block> <text>` now takes the same optional type
 as `--annotate`, which is `comment`, `looks_good` or `delete`.
 
-> **Upgrading with Pi:** after the plugin moves to 0.11.0, run `plannotator-tui pi install`
+> **Upgrading with Pi:** after the plugin moves to 0.11.0 or later, run `plannotator-tui pi install`
 > again, then `/reload` in each Pi session (or restart them). The new binary does not notice
 > an older Pi extension.
 
