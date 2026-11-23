@@ -219,7 +219,7 @@ Full install. Works with Claude Code, Codex, pi, Copilot CLI, Droid, Oh My Pi, H
 
 | Key | Opens |
 |---|---|
-| `Ctrl+B O` | this folder, with a file tree |
+| `Ctrl+B D` | this folder, with a file tree |
 | `Ctrl+B Shift+O` | the agent's recent replies |
 | `Ctrl+B Ctrl+O` | the agent's newest reply, with no picker |
 | Ctrl-click a `file://…md` link | that file, only with the opt-in Links add-on below |
