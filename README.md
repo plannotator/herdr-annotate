@@ -219,7 +219,7 @@ Full install. Works with Claude Code, Codex, pi, Copilot CLI, Droid, Oh My Pi, H
 
 | Key | Opens |
 |---|---|
-| `Ctrl+B O` | this folder, with a file tree |
+| `Ctrl+B D` | this folder, with a file tree |
 | `Ctrl+B Shift+O` | the agent's recent replies |
 | `Ctrl+B Ctrl+O` | the agent's newest reply, with no picker |
 | Ctrl-click a `file://…md` link | that file, only with the opt-in Links add-on below |
@@ -246,6 +246,15 @@ type = "plugin_action"
 command = "annotate.review"
 description = "review this repo's changes"
 ```
+
+In the review, `d` goes to the definition of a word on the cursor's line, and `ctrl+o` goes
+back. `o` shows the whole file as it is now and `O` as it was before the change; `Esc` returns
+to the diff. `x` marks a file viewed, and the file list ticks it. `z` hides or shows the notes,
+here and in document reviews.
+
+To review a GitHub pull request, run `plannotator-tui herdr review 123` (or the pull request's
+link) from a pane in the repository. It needs plannotator-tui on your `PATH` and a `gh` login,
+and it posts nothing to GitHub.
 
 `annotate.gate` opens the same folder review as `annotate.open`, with an **Approve** button
 (`A`). The agent gets `The user approved.` (with any notes as non-blocking guidance), or your
@@ -286,13 +295,22 @@ plannotator-tui. If neither is installed, Ctrl-click shows a notification saying
 > the old behavior.
 
 **Send** (or `E`) makes the review the agent's next message. `q` closes. On an agent reply, `S`
-sends and closes in one key; `E` and `q` are unchanged.
+sends and closes in one key; `E` and `q` are unchanged. `/` searches the open document, then
+`n` and `N` go to the next and previous match.
 
 | Option | Where |
 |---|---|
 | Agents request reviews themselves | `npx skills add plannotator/herdr-annotate --skill plannotator-tui -g` |
 | Open as full tab, split, or popup | `[herdr] placement = "overlay" \| "split" \| "popup"` in `~/.config/plannotator-tui/config.toml` |
 | Use without Herdr | [plannotator-tui](https://github.com/plannotator/plannotator-tui) |
+
+Scripts and agents can leave a note without opening a pane:
+`plannotator-tui --annotate-block <file.md> <block> <text>` now takes the same optional type
+as `--annotate`, which is `comment`, `looks_good` or `delete`.
+
+> **Upgrading with Pi:** after the plugin moves to 0.11.0, run `plannotator-tui pi install`
+> again, then `/reload` in each Pi session (or restart them). The new binary does not notice
+> an older Pi extension.
 
 ### Remote sessions
 
