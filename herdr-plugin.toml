@@ -1,6 +1,6 @@
 id = "annotate"
 name = "Annotate"
-version = "0.11.6"
+version = "0.11.7"
 min_herdr_version = "0.8.0"
 description = "Comment on terminal selections and copy annotations as agent context."
 platforms = ["linux", "macos", "windows"]
@@ -150,3 +150,13 @@ description = "Review the focused pane's uncommitted git changes in plannotator-
 contexts = ["workspace", "pane"]
 platforms = ["macos", "linux"]
 command = ["./bin/plannotator-tui.exe", "herdr", "review"]
+
+# The change picker over the same repository: uncommitted, unstaged or staged changes, the
+# branch, or a recent commit. Nothing is captured first, so the pane opens at once.
+[[actions]]
+id = "review-pick"
+title = "Annotate: pick changes to review"
+description = "Pick what to review in the focused pane's git repository: uncommitted, unstaged or staged changes, the branch, or a recent commit."
+contexts = ["workspace", "pane"]
+platforms = ["macos", "linux"]
+command = ["./bin/plannotator-tui.exe", "herdr", "review", "--pick"]
