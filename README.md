@@ -236,8 +236,8 @@ description = "review this pane's recent output"
 ```
 
 `annotate.review` opens a code review of the focused pane's git changes. Comment on lines of
-the diff, then send the comments to the agent in that pane. A folder with no repository or no
-changes shows an error instead. It works on macOS and Linux, and has no default key:
+the diff, then send the comments to the agent in that pane. A folder with no repository
+shows an error instead. It works on macOS and Linux, and has no default key:
 
 ```toml
 [[keys.command]]
@@ -245,6 +245,19 @@ key = "prefix+ctrl+r"
 type = "plugin_action"
 command = "annotate.review"
 description = "review this repo's changes"
+```
+
+With nothing uncommitted, `annotate.review` opens a picker instead: uncommitted, unstaged or
+staged changes, the branch, or a recent commit. The cursor starts on the first row with
+changes, so after an agent has committed it is already on the newest commit. `annotate.review-pick`
+opens that picker straight away, and `p` inside a review brings it back. It has no default key:
+
+```toml
+[[keys.command]]
+key = "prefix+ctrl+p"
+type = "plugin_action"
+command = "annotate.review-pick"
+description = "pick changes to review"
 ```
 
 In the review, `d` goes to the definition of a word on the cursor's line, and `ctrl+o` goes
