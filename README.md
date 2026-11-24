@@ -256,6 +256,10 @@ Drag over lines with the mouse to select them, then `c` comments and `s` suggest
 filters the files by name, `t` by kind (code, tests, docs and so on) and `H` hides viewed
 files. Drag the lines between the panes to resize them.
 
+The comment box opens right under the lines you selected. The header's `Split | Unified`
+switch (or `u`) changes the layout, `,` opens the diff settings, and in split view you can drag
+the middle line to give one side more room. Your choices are remembered for the next review.
+
 To review a GitHub pull request, run `plannotator-tui herdr review 123` (or the pull request's
 link) from a pane in the repository. It needs plannotator-tui on your `PATH` and a `gh` login,
 and it posts nothing to GitHub.
